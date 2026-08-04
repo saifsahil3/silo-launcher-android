@@ -1,0 +1,6 @@
+{
+  "name": "MorphLauncher",
+  "description": "Multi-mode context-shifting Android launcher with Focus, Drive, Sleep, Normal, and Pass-Through modes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
