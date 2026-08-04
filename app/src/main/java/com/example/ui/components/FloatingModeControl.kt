@@ -94,7 +94,6 @@ fun FloatingModeControl(
     }
 
     val modeColor = when (currentMode) {
-        LauncherMode.NORMAL -> Color(0xFF2E7D32)
         LauncherMode.FOCUS -> Color(0xFF7B1FA2)
         LauncherMode.DRIVE -> Color(0xFFE65100)
         LauncherMode.SLEEP -> Color(0xFF283593)
@@ -103,7 +102,6 @@ fun FloatingModeControl(
     }
 
     val modeIcon = when (currentMode) {
-        LauncherMode.NORMAL -> Icons.Default.GridView
         LauncherMode.FOCUS -> Icons.Default.Psychology
         LauncherMode.DRIVE -> Icons.Default.DirectionsCar
         LauncherMode.SLEEP -> Icons.Default.Bedtime
@@ -187,18 +185,6 @@ fun FloatingModeControl(
                         )
 
                         FloatingModeOption(
-                            mode = LauncherMode.NORMAL,
-                            currentMode = currentMode,
-                            icon = Icons.Default.GridView,
-                            label = "Normal",
-                            accentColor = Color(0xFF2E7D32),
-                            onSelect = {
-                                menuState = FloatingMenuState.CLOSED
-                                onModeSelected(LauncherMode.NORMAL)
-                            }
-                        )
-
-                        FloatingModeOption(
                             mode = LauncherMode.FOCUS,
                             currentMode = currentMode,
                             icon = Icons.Default.Psychology,
@@ -256,20 +242,9 @@ fun FloatingModeControl(
                                 menuState = FloatingMenuState.CLOSED
                                 onModeSelected(LauncherMode.PASS_THROUGH)
                                 PassThroughManager.setPassThroughActive(context, true)
-                                if (!android.provider.Settings.canDrawOverlays(context)) {
-                                    try {
-                                        val intent = android.content.Intent(
-                                            android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                            android.net.Uri.parse("package:${context.packageName}")
-                                        ).apply {
-                                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        }
-                                        context.startActivity(intent)
-                                    } catch (e: Throwable) {
-                                        e.printStackTrace()
-                                    }
+                                if (android.provider.Settings.canDrawOverlays(context)) {
+                                    PassThroughOverlayService.startService(context)
                                 }
-                                PassThroughOverlayService.startService(context)
                                 PassThroughManager.launchPassThroughLauncher(context)
                             }
                         )

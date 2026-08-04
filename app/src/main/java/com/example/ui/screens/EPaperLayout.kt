@@ -16,6 +16,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -86,6 +87,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
+import com.example.util.toImageBitmapSafe
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -290,12 +294,23 @@ private fun EPaperHeader(
                 color = MaterialTheme.colorScheme.surface,
                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.surfaceVariant)
             ) {
-                Text(
-                    text = if (isCharging) "$batteryLevel% ⚡ Charging" else "$batteryLevel% Charged",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                )
+                ) {
+                    Text(
+                        text = "$batteryLevel%",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (isCharging) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "⚡",
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
+                }
             }
         }
 
@@ -508,6 +523,18 @@ private fun BookshelfAppCard(
     queueBadge: String,
     onLaunch: () -> Unit
 ) {
+    val context = LocalContext.current
+    val iconBitmap = remember(app) {
+        app.iconDrawable?.toImageBitmapSafe() ?: try {
+            context.packageManager.getApplicationIcon(app.packageName).toImageBitmapSafe()
+        } catch (e: Throwable) {
+            null
+        }
+    }
+    val greyscaleFilter = remember {
+        ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
+    }
+
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -526,14 +553,24 @@ private fun BookshelfAppCard(
                 modifier = Modifier
                     .size(44.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                    .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f), CircleShape)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Book,
-                    contentDescription = app.label,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
-                )
+                if (iconBitmap != null) {
+                    Image(
+                        bitmap = iconBitmap,
+                        contentDescription = app.label,
+                        colorFilter = greyscaleFilter,
+                        modifier = Modifier.size(28.dp)
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Book,
+                        contentDescription = app.label,
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(14.dp))
@@ -870,36 +907,111 @@ private fun TheVaultSection(
                             .padding(bottom = 12.dp)
                     )
 
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        filteredVaultApps.forEach { app ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable { onLaunchApp(app) }
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = app.label,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
+                    // Unlocked Vault App Grid (4 Columns)
+                    val columns = 4
+                    val context = LocalContext.current
+                    val greyscaleFilter = remember {
+                        ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
+                    }
 
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                                    contentDescription = "Open",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(16.dp)
-                                )
+                    val appRows = remember(filteredVaultApps) {
+                        filteredVaultApps.chunked(columns)
+                    }
+
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        appRows.forEach { rowApps ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                rowApps.forEach { app ->
+                                    Box(
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        EPaperGridAppCell(
+                                            app = app,
+                                            greyscaleFilter = greyscaleFilter,
+                                            onLaunch = { onLaunchApp(app) }
+                                        )
+                                    }
+                                }
+                                repeat(columns - rowApps.size) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
                             }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun EPaperGridAppCell(
+    app: AppInfo,
+    greyscaleFilter: ColorFilter,
+    onLaunch: () -> Unit
+) {
+    val context = LocalContext.current
+    val iconBitmap = remember(app) {
+        app.iconDrawable?.toImageBitmapSafe() ?: try {
+            context.packageManager.getApplicationIcon(app.packageName).toImageBitmapSafe()
+        } catch (e: Throwable) {
+            null
+        }
+    }
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable { onLaunch() }
+            .padding(vertical = 8.dp, horizontal = 4.dp)
+    ) {
+        // Larger App Icon Badge
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(52.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                .border(1.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f), CircleShape)
+        ) {
+            if (iconBitmap != null) {
+                Image(
+                    bitmap = iconBitmap,
+                    contentDescription = app.label,
+                    colorFilter = greyscaleFilter,
+                    modifier = Modifier.size(36.dp)
+                )
+            } else {
+                Text(
+                    text = app.label.take(1).uppercase(Locale.getDefault()),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Small App Name Label
+        Text(
+            text = app.label,
+            style = MaterialTheme.typography.labelSmall,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center
+        )
     }
 }
 

@@ -83,7 +83,7 @@ class PassThroughOverlayService : Service() {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("MorphLauncher Pass-Through Active")
+            .setContentTitle("Silo Pass-Through Active")
             .setContentText("Tap floating overlay or notification to return")
             .setSmallIcon(android.R.drawable.ic_menu_compass)
             .setContentIntent(pendingIntent)

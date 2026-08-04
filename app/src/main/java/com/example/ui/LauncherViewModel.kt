@@ -52,7 +52,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val dao = db.modeSettingDao()
 
 
-    private val _currentMode = MutableStateFlow(LauncherMode.NORMAL)
+    private val _currentMode = MutableStateFlow(LauncherMode.FOCUS)
     val currentMode: StateFlow<LauncherMode> = _currentMode.asStateFlow()
 
     private val _allApps = MutableStateFlow<List<AppInfo>>(emptyList())
@@ -145,7 +145,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                     val savedMode = try {
                         LauncherMode.valueOf(current.currentMode)
                     } catch (e: Exception) {
-                        LauncherMode.NORMAL
+                        LauncherMode.FOCUS
                     }
                     _currentMode.value = savedMode
 

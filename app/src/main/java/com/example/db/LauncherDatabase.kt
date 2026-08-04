@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.Flow
 @Entity(tableName = "mode_settings")
 data class ModeSettingEntity(
     @PrimaryKey val id: Int = 1,
-    val currentMode: String = "NORMAL",
+    val currentMode: String = "FOCUS",
     val focusAllowedPackages: String = "com.google.android.dialer,com.google.android.apps.messaging,com.google.android.keep",
     val driveFavoritePackages: String = "com.google.android.apps.maps,com.google.android.music,com.google.android.dialer",
     val sleepAllowedPackages: String = "com.google.android.deskclock,com.google.android.dialer",

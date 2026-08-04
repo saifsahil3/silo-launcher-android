@@ -49,7 +49,6 @@ import com.example.ui.components.SettingsDialog
 import com.example.ui.screens.DriveModeScreen
 import com.example.ui.screens.EPaperLayout
 import com.example.ui.screens.FocusModeScreen
-import com.example.ui.screens.NormalModeScreen
 import com.example.ui.screens.PassThroughModeScreen
 import com.example.ui.screens.SleepModeScreen
 import com.example.ui.theme.MyApplicationTheme
@@ -62,7 +61,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        handlePassThroughIntent(intent)
+        PassThroughManager.setPassThroughActive(this, false)
+        PassThroughOverlayService.stopService(this)
+        viewModel.setMode(LauncherMode.FOCUS)
 
         setContent {
             MyApplicationTheme {
@@ -74,36 +75,25 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handlePassThroughIntent(intent)
+        PassThroughManager.setPassThroughActive(this, false)
+        PassThroughOverlayService.stopService(this)
+        viewModel.setMode(LauncherMode.FOCUS)
     }
 
     override fun onResume() {
         super.onResume()
-        if (PassThroughManager.isPassThroughActive(this)) {
-            val isExiting = intent?.getBooleanExtra("EXIT_PASSTHROUGH", false) == true
-            if (isExiting) {
-                handlePassThroughIntent(intent)
-            } else {
-                PassThroughOverlayService.startService(this)
-                val launched = PassThroughManager.launchPassThroughLauncher(this)
-                if (!launched) {
-                    PassThroughManager.setPassThroughActive(this, false)
-                    PassThroughOverlayService.stopService(this)
-                    viewModel.setMode(LauncherMode.NORMAL)
-                }
-            }
-        } else {
-            PassThroughOverlayService.stopService(this)
+        PassThroughManager.setPassThroughActive(this, false)
+        PassThroughOverlayService.stopService(this)
+        if (viewModel.currentMode.value == LauncherMode.PASS_THROUGH) {
+            viewModel.setMode(LauncherMode.FOCUS)
         }
     }
 
     private fun handlePassThroughIntent(intent: Intent?) {
-        if (intent?.getBooleanExtra("EXIT_PASSTHROUGH", false) == true) {
-            PassThroughManager.setPassThroughActive(this, false)
-            PassThroughOverlayService.stopService(this)
-            viewModel.setMode(LauncherMode.NORMAL)
-            intent.removeExtra("EXIT_PASSTHROUGH")
-        }
+        PassThroughManager.setPassThroughActive(this, false)
+        PassThroughOverlayService.stopService(this)
+        viewModel.setMode(LauncherMode.FOCUS)
+        intent?.removeExtra("EXIT_PASSTHROUGH")
     }
 }
 
@@ -150,7 +140,6 @@ fun MorphLauncherApp(viewModel: LauncherViewModel) {
     }
 
     val backgroundColor = when (currentMode) {
-        LauncherMode.NORMAL -> MaterialTheme.colorScheme.background
         LauncherMode.FOCUS -> Color(0xFF0F0F12)
         LauncherMode.DRIVE -> Color(0xFF121318)
         LauncherMode.SLEEP -> Color(0xFF090A0D)
@@ -195,13 +184,6 @@ fun MorphLauncherApp(viewModel: LauncherViewModel) {
                 modifier = Modifier.fillMaxSize()
             ) { mode ->
                 when (mode) {
-                    LauncherMode.NORMAL -> NormalModeScreen(
-                        viewModel = viewModel,
-                        allApps = allApps,
-                        isLoading = isLoadingApps,
-                        searchQuery = searchQuery,
-                        selectedCategory = selectedCategory
-                    )
                     LauncherMode.FOCUS -> FocusModeScreen(
                         viewModel = viewModel,
                         allApps = allApps,
@@ -238,7 +220,7 @@ fun MorphLauncherApp(viewModel: LauncherViewModel) {
             // Floating Pass-Through Banner Overlay
             PassThroughFloatingBanner(
                 isVisible = showPassThroughBanner,
-                onReturnToMorphLauncher = { viewModel.setMode(LauncherMode.NORMAL) },
+                onReturnToMorphLauncher = { viewModel.setMode(LauncherMode.FOCUS) },
                 onDismiss = { viewModel.dismissPassThroughBanner() },
                 modifier = Modifier.align(Alignment.BottomStart)
             )

@@ -72,7 +72,6 @@ fun ModeSelectorHeader(
     var showVerticalOverlay by remember { mutableStateOf(false) }
 
     val modeColor = when (currentMode) {
-        LauncherMode.NORMAL -> Color(0xFF2E7D32)
         LauncherMode.FOCUS -> Color(0xFF7B1FA2)
         LauncherMode.DRIVE -> Color(0xFFE65100)
         LauncherMode.SLEEP -> Color(0xFF283593)
@@ -81,7 +80,6 @@ fun ModeSelectorHeader(
     }
 
     val modeIcon = when (currentMode) {
-        LauncherMode.NORMAL -> Icons.Default.GridView
         LauncherMode.FOCUS -> Icons.Default.Psychology
         LauncherMode.DRIVE -> Icons.Default.DirectionsCar
         LauncherMode.SLEEP -> Icons.Default.Bedtime
@@ -90,7 +88,6 @@ fun ModeSelectorHeader(
     }
 
     val modeTitle = when (currentMode) {
-        LauncherMode.NORMAL -> "Normal"
         LauncherMode.FOCUS -> "Focus"
         LauncherMode.DRIVE -> "Drive"
         LauncherMode.SLEEP -> "Sleep"
@@ -224,19 +221,6 @@ fun ModeSelectorHeader(
                         modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        ModeItemOption(
-                            mode = LauncherMode.NORMAL,
-                            currentMode = currentMode,
-                            icon = Icons.Default.GridView,
-                            label = "Normal",
-                            accentColor = Color(0xFF2E7D32),
-                            onSelect = {
-                                showVerticalOverlay = false
-                                isExpanded = false
-                                onModeSelected(LauncherMode.NORMAL)
-                            }
-                        )
-
                         ModeItemOption(
                             mode = LauncherMode.FOCUS,
                             currentMode = currentMode,

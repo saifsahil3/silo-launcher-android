@@ -9,6 +9,10 @@ import android.appwidget.AppWidgetProviderInfo
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -73,6 +77,13 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlinx.coroutines.coroutineScope
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -83,6 +94,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -1308,7 +1320,7 @@ private fun SystemWidgetHostCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = if (isEditing) 6.dp else 2.dp)
+            .padding(vertical = 4.dp)
             .then(
                 if (isEditing) {
                     Modifier
@@ -1317,23 +1329,23 @@ private fun SystemWidgetHostCard(
                             color = Color(0xFF80CBC4),
                             shape = RoundedCornerShape(16.dp)
                         )
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFF141418).copy(alpha = 0.9f))
+                        .background(
+                            color = Color(0xFF16161E).copy(alpha = 0.9f),
+                            shape = RoundedCornerShape(16.dp)
+                        )
                         .padding(10.dp)
                 } else {
-                    Modifier.pointerInput(Unit) {
-                        detectTapGestures(
-                            onLongPress = {
-                                isEditing = true
-                            }
-                        )
-                    }
+                    Modifier
                 }
             )
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            // Editing Mode Top Controls Bar
-            AnimatedVisibility(visible = isEditing) {
+            // Edit Mode Header Bar (Visible ONLY when long-pressed/editing)
+            AnimatedVisibility(
+                visible = isEditing,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier
@@ -1342,7 +1354,10 @@ private fun SystemWidgetHostCard(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.Widgets,
                                 contentDescription = null,
@@ -1355,7 +1370,9 @@ private fun SystemWidgetHostCard(
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF80CBC4),
-                                letterSpacing = 0.5.sp
+                                letterSpacing = 0.5.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
 
@@ -1364,7 +1381,7 @@ private fun SystemWidgetHostCard(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             // Quick Delete Button
-                            Surface(
+                            androidx.compose.material3.Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = Color(0xFFFF5252).copy(alpha = 0.2f),
                                 border = BorderStroke(1.dp, Color(0xFFFF5252)),
@@ -1387,17 +1404,22 @@ private fun SystemWidgetHostCard(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Delete,
-                                        contentDescription = "Delete",
+                                        contentDescription = "Delete Widget",
                                         tint = Color(0xFFFF5252),
                                         modifier = Modifier.size(14.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Delete", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF5252))
+                                    Text(
+                                        text = "Delete",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFFF5252)
+                                    )
                                 }
                             }
 
-                            // Done Button
-                            Surface(
+                            // Done Editing Button
+                            androidx.compose.material3.Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = Color(0xFF80CBC4),
                                 modifier = Modifier
@@ -1415,7 +1437,12 @@ private fun SystemWidgetHostCard(
                                         modifier = Modifier.size(14.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Done", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                                    Text(
+                                        text = "Done",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.Black
+                                    )
                                 }
                             }
                         }
@@ -1429,10 +1456,10 @@ private fun SystemWidgetHostCard(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Size:", fontSize = 10.sp, color = Color.White.copy(alpha = 0.6f))
+                        Text("Height:", fontSize = 10.sp, color = Color.White.copy(alpha = 0.6f))
                         listOf(120, 180, 260, 360).forEach { size ->
                             val isSel = currentHeightDp == size
-                            Surface(
+                            androidx.compose.material3.Surface(
                                 shape = RoundedCornerShape(6.dp),
                                 color = if (isSel) Color(0xFF80CBC4) else Color(0xFF2B2B38),
                                 modifier = Modifier
@@ -1455,18 +1482,66 @@ private fun SystemWidgetHostCard(
                 }
             }
 
-            // Widget Content View
+            // Widget Content View (Holds exact height currentHeightDp.dp directly for widget content)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(currentHeightDp.dp)
+                    .pointerInput(Unit) {
+                        coroutineScope {
+                            awaitEachGesture {
+                                val down = awaitFirstDown(pass = PointerEventPass.Initial)
+                                val downTime = System.currentTimeMillis()
+                                var triggered = false
+                                while (!triggered) {
+                                    val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                                    val change = event.changes.firstOrNull { it.id == down.id }
+                                    if (change == null || !change.pressed) break
+                                    if (System.currentTimeMillis() - downTime >= 400) {
+                                        isEditing = true
+                                        triggered = true
+                                    }
+                                }
+                            }
+                        }
+                    }
             ) {
                 if (widgetInfo != null) {
+                    LaunchedEffect(currentHeightDp) {
+                        try {
+                            val options = android.os.Bundle().apply {
+                                putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 100)
+                                putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, currentHeightDp)
+                                putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 500)
+                                putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, currentHeightDp)
+                            }
+                            appWidgetManager.updateAppWidgetOptions(widgetId, options)
+                        } catch (e: Throwable) {
+                            e.printStackTrace()
+                        }
+                    }
+
                     AndroidView(
                         factory = { ctx ->
                             try {
                                 appWidgetHost.createView(ctx, widgetId, widgetInfo).apply {
                                     setAppWidget(widgetId, widgetInfo)
+                                    val gestureDetector = androidx.core.view.GestureDetectorCompat(
+                                        ctx,
+                                        object : android.view.GestureDetector.SimpleOnGestureListener() {
+                                            override fun onLongPress(e: android.view.MotionEvent) {
+                                                isEditing = true
+                                            }
+                                        }
+                                    )
+                                    setOnTouchListener { _, event ->
+                                        gestureDetector.onTouchEvent(event)
+                                        false
+                                    }
+                                    setOnLongClickListener {
+                                        isEditing = true
+                                        true
+                                    }
                                     layoutParams = android.view.ViewGroup.LayoutParams(
                                         android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                                         android.view.ViewGroup.LayoutParams.MATCH_PARENT
@@ -1485,6 +1560,43 @@ private fun SystemWidgetHostCard(
                             if (view is AppWidgetHostView) {
                                 try {
                                     view.setAppWidget(widgetId, widgetInfo)
+                                    val gestureDetector = androidx.core.view.GestureDetectorCompat(
+                                        view.context,
+                                        object : android.view.GestureDetector.SimpleOnGestureListener() {
+                                            override fun onLongPress(e: android.view.MotionEvent) {
+                                                isEditing = true
+                                            }
+                                        }
+                                    )
+                                    view.setOnTouchListener { _, event ->
+                                        gestureDetector.onTouchEvent(event)
+                                        false
+                                    }
+                                    view.setOnLongClickListener {
+                                        isEditing = true
+                                        true
+                                    }
+                                    val displayMetrics = view.resources.displayMetrics
+                                    val density = displayMetrics.density
+                                    val widthPx = if (view.width > 0) view.width else displayMetrics.widthPixels
+                                    val minWidthDp = (widthPx / density).toInt().coerceAtLeast(100)
+                                    val minHeightDp = currentHeightDp.coerceAtLeast(40)
+
+                                    val options = android.os.Bundle().apply {
+                                        putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, minWidthDp)
+                                        putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, minHeightDp)
+                                        putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, minWidthDp)
+                                        putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, minHeightDp)
+                                    }
+
+                                    view.updateAppWidgetSize(options, minWidthDp, minHeightDp, minWidthDp, minHeightDp)
+                                    appWidgetManager.updateAppWidgetOptions(widgetId, options)
+                                    view.layoutParams = android.view.ViewGroup.LayoutParams(
+                                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                                    )
+                                    view.requestLayout()
+                                    view.invalidate()
                                 } catch (e: Throwable) {
                                     e.printStackTrace()
                                 }
@@ -1540,8 +1652,12 @@ private fun SystemWidgetHostCard(
                 }
             }
 
-            // Drag-to-Resize Handle Bar at Bottom
-            AnimatedVisibility(visible = isEditing) {
+            // Drag-to-Resize Handle Bar at Bottom (Visible ONLY when isEditing)
+            AnimatedVisibility(
+                visible = isEditing,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()

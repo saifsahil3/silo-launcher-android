@@ -4,14 +4,24 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Morphing geometric M shape -->
+    <!-- S -->
     <path
-        android:fillColor="#80C7FF"
-        android:pathData="M34,32 L46,32 L54,52 L62,32 L74,32 L74,76 L64,76 L64,48 L57,66 L51,66 L44,48 L44,76 L34,76 Z" />
+        android:fillColor="#1C2E5E"
+        android:pathData="M24,42 C24,37 32,37 32,42 C32,47 24,47 24,52 C24,58 33,58 33,52 L28,52 C28,54 27,54 27,52 C27,50 35,50 35,42 C35,34 22,34 22,42 Z" />
+    <!-- Golden Pillar I -->
     <path
-        android:fillColor="#38D39F"
-        android:pathData="M28,54 L20,54 L20,62 L28,62 Z" />
+        android:fillColor="#FFB300"
+        android:pathData="M38,36 h6 v22 h-6 z" />
+    <!-- L -->
     <path
-        android:fillColor="#FFB74D"
-        android:pathData="M80,54 L88,54 L88,62 L80,62 Z" />
+        android:fillColor="#1C2E5E"
+        android:pathData="M48,36 h5 v18 h8 v4 h-13 z" />
+    <!-- O -->
+    <path
+        android:fillColor="#1C2E5E"
+        android:pathData="M65,47 A9,9 0 1,1 83,47 A9,9 0 1,1 65,47 Z M70,47 A4,4 0 1,0 78,47 A4,4 0 1,0 70,47 Z" />
+    <!-- Golden Dot in O -->
+    <path
+        android:fillColor="#FFB300"
+        android:pathData="M72,47 A2,2 0 1,1 76,47 A2,2 0 1,1 72,47 Z" />
 </vector>

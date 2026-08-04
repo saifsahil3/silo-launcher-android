@@ -156,15 +156,33 @@ class FocusModeTest {
     }
 
     @Test
+    fun testSystemWidgetHeightResizing() {
+        val systemWidget = FocusWidgetData.SystemWidget(
+            widgetId = 301,
+            label = "Analog Clock",
+            packageName = "com.android.deskclock",
+            heightDp = 180
+        )
+        assertEquals(180, systemWidget.heightDp)
+
+        // Mutate heightDp as performed by resize controls
+        systemWidget.heightDp = 260
+        assertEquals(260, systemWidget.heightDp)
+
+        systemWidget.heightDp = 360
+        assertEquals(360, systemWidget.heightDp)
+    }
+
+    @Test
     fun testLauncherModesEnum() {
         val modes = LauncherMode.entries
-        assertTrue(modes.contains(LauncherMode.NORMAL))
+        assertFalse(modes.map { it.name }.contains("NORMAL"))
         assertTrue(modes.contains(LauncherMode.FOCUS))
         assertTrue(modes.contains(LauncherMode.PASS_THROUGH))
         assertTrue(modes.contains(LauncherMode.DRIVE))
         assertTrue(modes.contains(LauncherMode.SLEEP))
         assertTrue(modes.contains(LauncherMode.E_PAPER))
-        assertEquals(6, modes.size)
+        assertEquals(5, modes.size)
     }
 }
 

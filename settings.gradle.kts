@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "MorphLauncher"
+rootProject.name = "Silo"
 
 include(":app")
