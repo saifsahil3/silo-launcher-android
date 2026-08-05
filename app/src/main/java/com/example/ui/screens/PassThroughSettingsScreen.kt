@@ -119,9 +119,9 @@ fun PassThroughSettingsScreen(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = "PASS-THROUGH MODE",
+                            text = "PASS-THROUGH MODE [EXPERIMENTAL]",
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF80CBC4),
+                            color = Color(0xFFFFB74D),
                             fontSize = 12.sp,
                             letterSpacing = 1.sp
                         )
@@ -137,7 +137,7 @@ fun PassThroughSettingsScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "Pass-Through Mode temporarily yields home screen control to your phone's stock launcher (e.g. Pixel Launcher) while keeping MorphLauncher as default. Pressing Home returns you to stock, and tapping the floating overlay instantly returns to MorphLauncher.",
+                    text = "Pass-Through Mode is an experimental option that launches your phone's stock launcher package (e.g. Pixel Launcher) while keeping Silo Launcher as default without background overlay services.",
                     fontSize = 13.sp,
                     color = Color.White.copy(alpha = 0.8f),
                     lineHeight = 18.sp
@@ -145,58 +145,32 @@ fun PassThroughSettingsScreen(
             }
         }
 
-        // Overlay Permission Status Card
+        // Experimental Caution Note
         Card(
             shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF181B26)),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF261D18)),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Security,
-                            contentDescription = null,
-                            tint = if (hasOverlayPermission) Color(0xFF4CAF50) else Color(0xFFFFB74D)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Security,
+                        contentDescription = null,
+                        tint = Color(0xFFFFB74D)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "Experimental Delegate Launcher Mode",
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            fontSize = 14.sp
                         )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                text = "Floating Return Button Overlay",
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                fontSize = 14.sp
-                            )
-                            Text(
-                                text = if (hasOverlayPermission) "Permission Granted" else "Draw Over Other Apps Needed",
-                                fontSize = 12.sp,
-                                color = if (hasOverlayPermission) Color(0xFF81C784) else Color(0xFFFFB74D)
-                            )
-                        }
-                    }
-                }
-
-                if (!hasOverlayPermission) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Button(
-                        onClick = {
-                            val intent = Intent(
-                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                Uri.parse("package:${context.packageName}")
-                            )
-                            context.startActivity(intent)
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0288D1)),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("grant_overlay_permission_button")
-                    ) {
-                        Text("Grant Overlay Permission", fontWeight = FontWeight.Bold)
+                        Text(
+                            text = "Zero overlay background services. Launches chosen stock home app. Swiping home on some devices may return to Silo unless default home is changed.",
+                            fontSize = 12.sp,
+                            color = Color(0xFFFFB74D)
+                        )
                     }
                 }
             }
@@ -350,10 +324,6 @@ fun PassThroughSettingsScreen(
                             PassThroughManager.savePassThroughLauncher(context, targetPkg)
                             PassThroughManager.setPassThroughActive(context, true)
                             viewModel.setMode(LauncherMode.PASS_THROUGH)
-
-                            if (Settings.canDrawOverlays(context)) {
-                                PassThroughOverlayService.startService(context)
-                            }
                             PassThroughManager.launchPassThroughLauncher(context, targetPkg)
                         }
                     },

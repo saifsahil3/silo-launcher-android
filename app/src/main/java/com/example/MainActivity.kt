@@ -53,6 +53,9 @@ import com.example.ui.screens.PassThroughModeScreen
 import com.example.ui.screens.SleepModeScreen
 import com.example.ui.theme.MyApplicationTheme
 
+import com.example.ui.screens.AllAppsScreen
+import com.example.ui.screens.SettingsScreen
+
 class MainActivity : ComponentActivity() {
 
     private val viewModel: LauncherViewModel by viewModels()
@@ -62,12 +65,11 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         PassThroughManager.setPassThroughActive(this, false)
-        PassThroughOverlayService.stopService(this)
         viewModel.setMode(LauncherMode.FOCUS)
 
         setContent {
             MyApplicationTheme {
-                MorphLauncherApp(viewModel = viewModel)
+                SiloLauncherApp(viewModel = viewModel)
             }
         }
     }
@@ -76,14 +78,12 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         PassThroughManager.setPassThroughActive(this, false)
-        PassThroughOverlayService.stopService(this)
         viewModel.setMode(LauncherMode.FOCUS)
     }
 
     override fun onResume() {
         super.onResume()
         PassThroughManager.setPassThroughActive(this, false)
-        PassThroughOverlayService.stopService(this)
         if (viewModel.currentMode.value == LauncherMode.PASS_THROUGH) {
             viewModel.setMode(LauncherMode.FOCUS)
         }
@@ -98,7 +98,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MorphLauncherApp(viewModel: LauncherViewModel) {
+fun SiloLauncherApp(viewModel: LauncherViewModel) {
     val currentMode by viewModel.currentMode.collectAsStateWithLifecycle()
     val allApps by viewModel.allApps.collectAsStateWithLifecycle()
     val stockLaunchers by viewModel.stockLaunchers.collectAsStateWithLifecycle()
@@ -113,123 +113,124 @@ fun MorphLauncherApp(viewModel: LauncherViewModel) {
     val batteryLevel by viewModel.batteryLevel.collectAsStateWithLifecycle()
     val isCharging by viewModel.isCharging.collectAsStateWithLifecycle()
     val showPassThroughBanner by viewModel.showPassThroughBanner.collectAsStateWithLifecycle()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
 
-    var showSettingsDialog by remember { mutableStateOf(false) }
+    var showSettingsScreen by remember { mutableStateOf(false) }
 
-    val context = LocalContext.current
-    val window = (context as? Activity)?.window
-    val isFullScreenMode = currentMode == LauncherMode.FOCUS || currentMode == LauncherMode.E_PAPER
+    if (showSettingsScreen) {
+        SettingsScreen(
+            viewModel = viewModel,
+            onBack = { showSettingsScreen = false }
+        )
+    } else {
+        val context = LocalContext.current
+        val window = (context as? Activity)?.window
+        val isFullScreenMode = currentMode == LauncherMode.FOCUS || currentMode == LauncherMode.E_PAPER
 
-    DisposableEffect(currentMode) {
-        if (window != null) {
-            val insetsController = WindowCompat.getInsetsController(window, window.decorView)
-            if (isFullScreenMode) {
-                insetsController.hide(WindowInsetsCompat.Type.statusBars())
-                insetsController.systemBarsBehavior =
-                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            } else {
-                insetsController.show(WindowInsetsCompat.Type.statusBars())
-            }
-        }
-        onDispose {
+        DisposableEffect(currentMode) {
             if (window != null) {
                 val insetsController = WindowCompat.getInsetsController(window, window.decorView)
-                insetsController.show(WindowInsetsCompat.Type.statusBars())
-            }
-        }
-    }
-
-    val backgroundColor = when (currentMode) {
-        LauncherMode.FOCUS -> Color(0xFF0F0F12)
-        LauncherMode.DRIVE -> Color(0xFF121318)
-        LauncherMode.SLEEP -> Color(0xFF090A0D)
-        LauncherMode.E_PAPER -> Color(0xFFF4F1EA)
-        LauncherMode.PASS_THROUGH -> Color(0xFF101218)
-    }
-
-    val scaffoldModifier = if (isFullScreenMode) {
-        Modifier
-            .fillMaxSize()
-            .background(backgroundColor)
-    } else {
-        Modifier
-            .fillMaxSize()
-            .background(backgroundColor)
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-    }
-
-    Scaffold(
-        modifier = scaffoldModifier,
-        containerColor = backgroundColor
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            // Context-Shifting Home Screen Canvas with Swipe Animation Effect
-            AnimatedContent(
-                targetState = currentMode,
-                transitionSpec = {
-                    val isForward = targetState.ordinal > initialState.ordinal
-                    if (isForward) {
-                        (slideInHorizontally(animationSpec = tween(300)) { width -> width } + fadeIn(tween(300)))
-                            .togetherWith(slideOutHorizontally(animationSpec = tween(300)) { width -> -width } + fadeOut(tween(300)))
-                    } else {
-                        (slideInHorizontally(animationSpec = tween(300)) { width -> -width } + fadeIn(tween(300)))
-                            .togetherWith(slideOutHorizontally(animationSpec = tween(300)) { width -> width } + fadeOut(tween(300)))
-                    }
-                },
-                label = "mode_swipe_transition",
-                modifier = Modifier.fillMaxSize()
-            ) { mode ->
-                when (mode) {
-                    LauncherMode.FOCUS -> FocusModeScreen(
-                        viewModel = viewModel,
-                        allApps = allApps,
-                        allowedPackages = focusAllowedPackages
-                    )
-                    LauncherMode.DRIVE -> DriveModeScreen(
-                        viewModel = viewModel,
-                        allApps = allApps,
-                        driveStats = driveStats
-                    )
-                    LauncherMode.SLEEP -> SleepModeScreen(
-                        viewModel = viewModel,
-                        sleepState = sleepState
-                    )
-                    LauncherMode.E_PAPER -> EPaperLayout(
-                        viewModel = viewModel,
-                        allApps = allApps
-                    )
-                    LauncherMode.PASS_THROUGH -> PassThroughModeScreen(
-                        viewModel = viewModel,
-                        stockLaunchers = stockLaunchers
-                    )
+                if (isFullScreenMode) {
+                    insetsController.hide(WindowInsetsCompat.Type.statusBars())
+                    insetsController.systemBarsBehavior =
+                        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                } else {
+                    insetsController.show(WindowInsetsCompat.Type.statusBars())
                 }
             }
+            onDispose {
+                if (window != null) {
+                    val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+                    insetsController.show(WindowInsetsCompat.Type.statusBars())
+                }
+            }
+        }
 
-            // Floating Mode Switcher & Settings Icon Button (Bottom Right)
-            FloatingModeControl(
-                currentMode = currentMode,
-                onModeSelected = { viewModel.setMode(it) },
-                onOpenSettings = { showSettingsDialog = true },
-                modifier = Modifier.align(Alignment.BottomEnd)
-            )
+        val backgroundColor = when (currentMode) {
+            LauncherMode.FOCUS -> Color(0xFF0F0F12)
+            LauncherMode.ALL_APPS -> Color(0xFF0F0F12)
+            LauncherMode.DRIVE -> Color(0xFF121318)
+            LauncherMode.SLEEP -> Color(0xFF090A0D)
+            LauncherMode.E_PAPER -> Color(0xFFF4F1EA)
+            LauncherMode.PASS_THROUGH -> Color(0xFF101218)
+        }
 
-            // Floating Pass-Through Banner Overlay
-            PassThroughFloatingBanner(
-                isVisible = showPassThroughBanner,
-                onReturnToMorphLauncher = { viewModel.setMode(LauncherMode.FOCUS) },
-                onDismiss = { viewModel.dismissPassThroughBanner() },
-                modifier = Modifier.align(Alignment.BottomStart)
-            )
+        val scaffoldModifier = if (isFullScreenMode) {
+            Modifier
+                .fillMaxSize()
+                .background(backgroundColor)
+        } else {
+            Modifier
+                .fillMaxSize()
+                .background(backgroundColor)
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+        }
 
-            // Settings & Triggers Dialog
-            if (showSettingsDialog) {
-                SettingsDialog(
-                    viewModel = viewModel,
-                    onDismiss = { showSettingsDialog = false }
+        Scaffold(
+            modifier = scaffoldModifier,
+            containerColor = backgroundColor
+        ) { innerPadding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            ) {
+                // Context-Shifting Home Screen Canvas with Swipe Animation Effect
+                AnimatedContent(
+                    targetState = currentMode,
+                    transitionSpec = {
+                        val isForward = targetState.ordinal > initialState.ordinal
+                        if (isForward) {
+                            (slideInHorizontally(animationSpec = tween(300)) { width -> width } + fadeIn(tween(300)))
+                                .togetherWith(slideOutHorizontally(animationSpec = tween(300)) { width -> -width } + fadeOut(tween(300)))
+                        } else {
+                            (slideInHorizontally(animationSpec = tween(300)) { width -> -width } + fadeIn(tween(300)))
+                                .togetherWith(slideOutHorizontally(animationSpec = tween(300)) { width -> width } + fadeOut(tween(300)))
+                        }
+                    },
+                    label = "mode_swipe_transition",
+                    modifier = Modifier.fillMaxSize()
+                ) { mode ->
+                    when (mode) {
+                        LauncherMode.FOCUS -> FocusModeScreen(
+                            viewModel = viewModel,
+                            allApps = allApps,
+                            allowedPackages = focusAllowedPackages
+                        )
+                        LauncherMode.ALL_APPS -> AllAppsScreen(
+                            viewModel = viewModel,
+                            allApps = allApps,
+                            searchQuery = searchQuery,
+                            selectedCategory = selectedCategory
+                        )
+                        LauncherMode.DRIVE -> DriveModeScreen(
+                            viewModel = viewModel,
+                            allApps = allApps,
+                            driveStats = driveStats
+                        )
+                        LauncherMode.SLEEP -> SleepModeScreen(
+                            viewModel = viewModel,
+                            sleepState = sleepState
+                        )
+                        LauncherMode.E_PAPER -> EPaperLayout(
+                            viewModel = viewModel,
+                            allApps = allApps
+                        )
+                        LauncherMode.PASS_THROUGH -> PassThroughModeScreen(
+                            viewModel = viewModel,
+                            stockLaunchers = stockLaunchers
+                        )
+                    }
+                }
+
+                // Floating Mode Switcher & Settings Icon Button (Bottom Right)
+                FloatingModeControl(
+                    currentMode = currentMode,
+                    enablePassThroughMode = settings.enablePassThroughMode,
+                    onModeSelected = { viewModel.setMode(it) },
+                    onOpenSettings = { showSettingsScreen = true },
+                    onExitToDefaultLauncher = { viewModel.triggerSystemHomePicker(context) },
+                    modifier = Modifier.align(Alignment.BottomEnd)
                 )
             }
         }

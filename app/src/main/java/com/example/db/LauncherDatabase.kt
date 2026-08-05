@@ -18,6 +18,7 @@ data class ModeSettingEntity(
     val driveFavoritePackages: String = "com.google.android.apps.maps,com.google.android.music,com.google.android.dialer",
     val sleepAllowedPackages: String = "com.google.android.deskclock,com.google.android.dialer",
     val passThroughLauncherPackage: String = "",
+    val enablePassThroughMode: Boolean = false,
     val autoTriggerBluetoothDrive: Boolean = true,
     val autoTriggerChargerSleep: Boolean = false,
     val bedtimeStartHour: Int = 22,
@@ -55,7 +56,7 @@ interface ModeSettingDao {
 
 @Database(
     entities = [ModeSettingEntity::class, PinnedAppEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class LauncherDatabase : RoomDatabase() {

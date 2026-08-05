@@ -78,7 +78,7 @@ fun PassThroughFloatingBanner(
                 ) {
                     Image(
                         painter = painterResource(id = com.example.R.mipmap.ic_launcher_round),
-                        contentDescription = "MorphLauncher App Logo",
+                        contentDescription = "Silo Launcher App Logo",
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -86,7 +86,7 @@ fun PassThroughFloatingBanner(
                 Spacer(modifier = Modifier.width(8.dp))
 
                 Text(
-                    text = "Return to MorphLauncher",
+                    text = "Return to Silo Launcher",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White

@@ -17,7 +17,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [34])
 class FocusModeTest {
 
     @Test
@@ -178,11 +178,12 @@ class FocusModeTest {
         val modes = LauncherMode.entries
         assertFalse(modes.map { it.name }.contains("NORMAL"))
         assertTrue(modes.contains(LauncherMode.FOCUS))
+        assertTrue(modes.contains(LauncherMode.ALL_APPS))
         assertTrue(modes.contains(LauncherMode.PASS_THROUGH))
         assertTrue(modes.contains(LauncherMode.DRIVE))
         assertTrue(modes.contains(LauncherMode.SLEEP))
         assertTrue(modes.contains(LauncherMode.E_PAPER))
-        assertEquals(5, modes.size)
+        assertEquals(6, modes.size)
     }
 }
 

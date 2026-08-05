@@ -12,6 +12,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.room.Room
 import com.example.data.AppInfo
 import com.example.data.AppRepository
+import com.example.db.DatabaseProvider
 import com.example.db.LauncherDatabase
 import com.example.db.ModeSettingEntity
 import com.example.model.LauncherMode
@@ -42,13 +43,7 @@ data class SleepState(
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
 
     private val appRepository = AppRepository()
-    private val db = Room.databaseBuilder(
-        application,
-        LauncherDatabase::class.java,
-        "morph_launcher.db"
-    )
-        .fallbackToDestructiveMigration()
-        .build()
+    private val db = DatabaseProvider.getDatabase(application)
     private val dao = db.modeSettingDao()
 
 
@@ -119,12 +114,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         // Register internal trigger receiver safely
         try {
             val filter = IntentFilter("com.example.morphlauncher.TRIGGER_EVENT")
-            ContextCompat.registerReceiver(
-                application,
-                triggerReceiver,
-                filter,
-                ContextCompat.RECEIVER_NOT_EXPORTED
-            )
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                getApplication<Application>().registerReceiver(triggerReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                getApplication<Application>().registerReceiver(triggerReceiver, filter)
+            }
         } catch (e: Throwable) {
             e.printStackTrace()
         }
@@ -277,6 +271,16 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun toggleEnablePassThroughMode(enabled: Boolean) {
+        viewModelScope.launch {
+            val updated = _settings.value.copy(enablePassThroughMode = enabled)
+            dao.saveSettings(updated)
+            if (!enabled && _currentMode.value == LauncherMode.PASS_THROUGH) {
+                setMode(LauncherMode.FOCUS)
+            }
+        }
+    }
+
     fun launchApp(context: Context, appInfo: AppInfo) {
         try {
             context.startActivity(appInfo.launchIntent)
@@ -298,13 +302,39 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun triggerSystemHomePicker(context: Context) {
         try {
-            val intent = Intent(Intent.ACTION_MAIN).apply {
-                addCategory(Intent.CATEGORY_HOME)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                val roleManager = context.getSystemService(android.app.role.RoleManager::class.java)
+                if (roleManager != null && roleManager.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME)) {
+                    if (!roleManager.isRoleHeld(android.app.role.RoleManager.ROLE_HOME)) {
+                        val roleIntent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                        context.startActivity(roleIntent)
+                        return
+                    }
+                }
+            }
+            val intent = Intent(android.provider.Settings.ACTION_HOME_SETTINGS).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
             context.startActivity(intent)
         } catch (e: Exception) {
-            e.printStackTrace()
+            try {
+                val fallbackIntent = Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(fallbackIntent)
+            } catch (err: Exception) {
+                try {
+                    val mainHomeIntent = Intent(Intent.ACTION_MAIN).apply {
+                        addCategory(Intent.CATEGORY_HOME)
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(Intent.createChooser(mainHomeIntent, "Select Default Home Launcher"))
+                } catch (ex: Exception) {
+                    ex.printStackTrace()
+                }
+            }
         }
     }
 
@@ -334,12 +364,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 addAction(Intent.ACTION_POWER_CONNECTED)
                 addAction(Intent.ACTION_POWER_DISCONNECTED)
             }
-            val batteryStatus: Intent? = ContextCompat.registerReceiver(
-                getApplication<Application>(),
-                batteryReceiver,
-                batteryFilter,
-                ContextCompat.RECEIVER_NOT_EXPORTED
-            )
+            val batteryStatus: Intent? = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                getApplication<Application>().registerReceiver(batteryReceiver, batteryFilter, Context.RECEIVER_EXPORTED)
+            } else {
+                getApplication<Application>().registerReceiver(batteryReceiver, batteryFilter)
+            }
             batteryStatus?.let { intent ->
                 val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
                 val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)

@@ -73,6 +73,7 @@ fun ModeSelectorHeader(
 
     val modeColor = when (currentMode) {
         LauncherMode.FOCUS -> Color(0xFF7B1FA2)
+        LauncherMode.ALL_APPS -> Color(0xFF7B1FA2)
         LauncherMode.DRIVE -> Color(0xFFE65100)
         LauncherMode.SLEEP -> Color(0xFF283593)
         LauncherMode.E_PAPER -> Color(0xFF8D6E63)
@@ -81,6 +82,7 @@ fun ModeSelectorHeader(
 
     val modeIcon = when (currentMode) {
         LauncherMode.FOCUS -> Icons.Default.Psychology
+        LauncherMode.ALL_APPS -> Icons.Default.GridView
         LauncherMode.DRIVE -> Icons.Default.DirectionsCar
         LauncherMode.SLEEP -> Icons.Default.Bedtime
         LauncherMode.E_PAPER -> Icons.AutoMirrored.Filled.MenuBook
@@ -89,6 +91,7 @@ fun ModeSelectorHeader(
 
     val modeTitle = when (currentMode) {
         LauncherMode.FOCUS -> "Focus"
+        LauncherMode.ALL_APPS -> "All Apps"
         LauncherMode.DRIVE -> "Drive"
         LauncherMode.SLEEP -> "Sleep"
         LauncherMode.E_PAPER -> "E-Paper"

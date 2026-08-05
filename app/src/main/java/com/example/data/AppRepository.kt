@@ -9,6 +9,9 @@ import android.graphics.drawable.Drawable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+import androidx.compose.runtime.Stable
+
+@Stable
 data class AppInfo(
     val label: String,
     val packageName: String,

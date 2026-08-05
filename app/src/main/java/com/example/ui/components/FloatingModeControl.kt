@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Check
@@ -76,8 +77,10 @@ enum class FloatingMenuState {
 @Composable
 fun FloatingModeControl(
     currentMode: LauncherMode,
+    enablePassThroughMode: Boolean = false,
     onModeSelected: (LauncherMode) -> Unit,
     onOpenSettings: () -> Unit,
+    onExitToDefaultLauncher: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -95,6 +98,7 @@ fun FloatingModeControl(
 
     val modeColor = when (currentMode) {
         LauncherMode.FOCUS -> Color(0xFF7B1FA2)
+        LauncherMode.ALL_APPS -> Color(0xFF00897B)
         LauncherMode.DRIVE -> Color(0xFFE65100)
         LauncherMode.SLEEP -> Color(0xFF283593)
         LauncherMode.E_PAPER -> Color(0xFF8D6E63)
@@ -103,6 +107,7 @@ fun FloatingModeControl(
 
     val modeIcon = when (currentMode) {
         LauncherMode.FOCUS -> Icons.Default.Psychology
+        LauncherMode.ALL_APPS -> Icons.Default.GridView
         LauncherMode.DRIVE -> Icons.Default.DirectionsCar
         LauncherMode.SLEEP -> Icons.Default.Bedtime
         LauncherMode.E_PAPER -> Icons.AutoMirrored.Filled.MenuBook
@@ -197,6 +202,18 @@ fun FloatingModeControl(
                         )
 
                         FloatingModeOption(
+                            mode = LauncherMode.ALL_APPS,
+                            currentMode = currentMode,
+                            icon = Icons.Default.GridView,
+                            label = "All Apps",
+                            accentColor = Color(0xFF00897B),
+                            onSelect = {
+                                menuState = FloatingMenuState.CLOSED
+                                onModeSelected(LauncherMode.ALL_APPS)
+                            }
+                        )
+
+                        FloatingModeOption(
                             mode = LauncherMode.DRIVE,
                             currentMode = currentMode,
                             icon = Icons.Default.DirectionsCar,
@@ -232,22 +249,53 @@ fun FloatingModeControl(
                             }
                         )
 
-                        FloatingModeOption(
-                            mode = LauncherMode.PASS_THROUGH,
-                            currentMode = currentMode,
-                            icon = Icons.Default.Layers,
-                            label = "Pass-Through",
-                            accentColor = Color(0xFF00695C),
-                            onSelect = {
-                                menuState = FloatingMenuState.CLOSED
-                                onModeSelected(LauncherMode.PASS_THROUGH)
-                                PassThroughManager.setPassThroughActive(context, true)
-                                if (android.provider.Settings.canDrawOverlays(context)) {
-                                    PassThroughOverlayService.startService(context)
+                        if (enablePassThroughMode) {
+                            FloatingModeOption(
+                                mode = LauncherMode.PASS_THROUGH,
+                                currentMode = currentMode,
+                                icon = Icons.Default.Layers,
+                                label = "Pass-Through",
+                                accentColor = Color(0xFF00695C),
+                                onSelect = {
+                                    menuState = FloatingMenuState.CLOSED
+                                    onModeSelected(LauncherMode.PASS_THROUGH)
+                                    PassThroughManager.setPassThroughActive(context, true)
+                                    PassThroughManager.launchPassThroughLauncher(context)
                                 }
-                                PassThroughManager.launchPassThroughLauncher(context)
-                            }
+                            )
+                        }
+
+                        HorizontalDivider(
+                            color = Color.White.copy(alpha = 0.12f),
+                            modifier = Modifier.padding(vertical = 4.dp)
                         )
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color(0xFF2B2524))
+                                .clickable {
+                                    menuState = FloatingMenuState.CLOSED
+                                    onExitToDefaultLauncher()
+                                }
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                                contentDescription = "Exit to Default Launcher",
+                                tint = Color(0xFFFFB74D),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "Exit to Default Launcher",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
                     }
                 }
             }

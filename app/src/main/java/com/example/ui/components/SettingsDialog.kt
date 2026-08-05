@@ -87,7 +87,7 @@ fun SettingsDialog(
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "MorphLauncher Engine",
+                            text = "Silo Launcher Engine",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -294,47 +294,13 @@ fun SettingsDialog(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
 
-                        // Floating overlay permission toggle
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Floating Mode Switcher Overlay",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    text = if (hasOverlayPermission) "Overlay permission active" else "Requires 'Draw over other apps' permission",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (hasOverlayPermission) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                                )
-                            }
-
-                            if (!hasOverlayPermission) {
-                                OutlinedButton(
-                                    onClick = {
-                                        val intent = Intent(
-                                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                            Uri.parse("package:${context.packageName}")
-                                        )
-                                        context.startActivity(intent)
-                                    }
-                                ) {
-                                    Text("Grant")
-                                }
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = "Permission Granted",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
+                        Text(
+                            text = "Zero overlay background services. Launcher modes switch seamlessly.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
 
@@ -370,18 +336,21 @@ fun SettingsDialog(
                         }
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Set MorphLauncher as your default launcher, or use Pass-Through Mode to temporarily delegate back to stock launcher.",
+                            text = "Set Silo Launcher as your default launcher, or open the native launcher chooser sheet to switch home apps.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         OutlinedButton(
-                            onClick = { viewModel.triggerSystemHomePicker(context) },
+                            onClick = {
+                                viewModel.triggerSystemHomePicker(context)
+                                onDismiss()
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("change_default_launcher_button")
                         ) {
-                            Text("Open Default Apps Selector")
+                            Text("Switch Default Launcher (Exit Silo)")
                         }
                     }
                 }

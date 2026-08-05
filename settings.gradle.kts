@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "Silo"
+rootProject.name = "silo-launcher-android"
 
 include(":app")
