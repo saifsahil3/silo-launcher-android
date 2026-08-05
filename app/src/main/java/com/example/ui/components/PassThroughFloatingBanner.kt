@@ -39,6 +39,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 
 @Composable
 fun PassThroughFloatingBanner(
@@ -77,7 +78,7 @@ fun PassThroughFloatingBanner(
                     contentAlignment = Alignment.Center
                 ) {
                     Image(
-                        painter = painterResource(id = com.example.R.mipmap.ic_launcher_round),
+                        painter = painterResource(id = R.mipmap.ic_launcher_round),
                         contentDescription = "Silo Launcher App Logo",
                         modifier = Modifier.size(28.dp)
                     )

@@ -213,6 +213,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         saveFocusPackagesToDb(current)
     }
 
+    fun reorderFocusAllowedPackages(newOrder: List<String>) {
+        val uniqueSet = newOrder.toSet()
+        _focusAllowedPackages.value = uniqueSet
+        saveFocusPackagesToDb(uniqueSet)
+    }
+
     private fun saveFocusPackagesToDb(packages: Set<String>) {
         viewModelScope.launch {
             val stringVal = packages.joinToString(",")

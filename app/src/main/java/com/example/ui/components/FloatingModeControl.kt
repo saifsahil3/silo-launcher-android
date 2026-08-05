@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -27,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -115,7 +117,7 @@ fun FloatingModeControl(
     }
 
     Box(
-        modifier = modifier
+        modifier = if (menuState != FloatingMenuState.CLOSED) Modifier.fillMaxSize() else modifier
             .padding(16.dp)
             .then(
                 if (isDraggable) {
@@ -126,9 +128,23 @@ fun FloatingModeControl(
             ),
         contentAlignment = Alignment.BottomEnd
     ) {
+        if (menuState != FloatingMenuState.CLOSED) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        menuState = FloatingMenuState.CLOSED
+                    }
+            )
+        }
+
         Column(
             horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.Bottom
+            verticalArrangement = Arrangement.Bottom,
+            modifier = if (menuState != FloatingMenuState.CLOSED) Modifier.padding(16.dp) else Modifier
         ) {
             // STAGE 2: Mode Selection List Card
             AnimatedVisibility(
@@ -189,6 +205,7 @@ fun FloatingModeControl(
                             modifier = Modifier.padding(vertical = 10.dp)
                         )
 
+                        // 1. Focus Mode
                         FloatingModeOption(
                             mode = LauncherMode.FOCUS,
                             currentMode = currentMode,
@@ -201,18 +218,7 @@ fun FloatingModeControl(
                             }
                         )
 
-                        FloatingModeOption(
-                            mode = LauncherMode.ALL_APPS,
-                            currentMode = currentMode,
-                            icon = Icons.Default.GridView,
-                            label = "All Apps",
-                            accentColor = Color(0xFF00897B),
-                            onSelect = {
-                                menuState = FloatingMenuState.CLOSED
-                                onModeSelected(LauncherMode.ALL_APPS)
-                            }
-                        )
-
+                        // 2. Drive Mode
                         FloatingModeOption(
                             mode = LauncherMode.DRIVE,
                             currentMode = currentMode,
@@ -225,18 +231,7 @@ fun FloatingModeControl(
                             }
                         )
 
-                        FloatingModeOption(
-                            mode = LauncherMode.SLEEP,
-                            currentMode = currentMode,
-                            icon = Icons.Default.Bedtime,
-                            label = "Sleep",
-                            accentColor = Color(0xFF283593),
-                            onSelect = {
-                                menuState = FloatingMenuState.CLOSED
-                                onModeSelected(LauncherMode.SLEEP)
-                            }
-                        )
-
+                        // 3. E-Paper Mode
                         FloatingModeOption(
                             mode = LauncherMode.E_PAPER,
                             currentMode = currentMode,
@@ -249,6 +244,33 @@ fun FloatingModeControl(
                             }
                         )
 
+                        // 4. Sleep Mode
+                        FloatingModeOption(
+                            mode = LauncherMode.SLEEP,
+                            currentMode = currentMode,
+                            icon = Icons.Default.Bedtime,
+                            label = "Sleep",
+                            accentColor = Color(0xFF283593),
+                            onSelect = {
+                                menuState = FloatingMenuState.CLOSED
+                                onModeSelected(LauncherMode.SLEEP)
+                            }
+                        )
+
+                        // 5. All Apps Mode
+                        FloatingModeOption(
+                            mode = LauncherMode.ALL_APPS,
+                            currentMode = currentMode,
+                            icon = Icons.Default.GridView,
+                            label = "All Apps",
+                            accentColor = Color(0xFF00897B),
+                            onSelect = {
+                                menuState = FloatingMenuState.CLOSED
+                                onModeSelected(LauncherMode.ALL_APPS)
+                            }
+                        )
+
+                        // 6. Pass-Through Mode (if enabled)
                         if (enablePassThroughMode) {
                             FloatingModeOption(
                                 mode = LauncherMode.PASS_THROUGH,
@@ -270,6 +292,7 @@ fun FloatingModeControl(
                             modifier = Modifier.padding(vertical = 4.dp)
                         )
 
+                        // 7. Exit to Default Launcher
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()

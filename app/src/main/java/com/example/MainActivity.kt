@@ -65,7 +65,6 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         PassThroughManager.setPassThroughActive(this, false)
-        viewModel.setMode(LauncherMode.FOCUS)
 
         setContent {
             MyApplicationTheme {
@@ -78,7 +77,6 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         PassThroughManager.setPassThroughActive(this, false)
-        viewModel.setMode(LauncherMode.FOCUS)
     }
 
     override fun onResume() {

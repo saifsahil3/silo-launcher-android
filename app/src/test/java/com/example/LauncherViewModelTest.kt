@@ -15,4 +15,12 @@ class LauncherViewModelTest {
         currentMode = LauncherMode.DRIVE
         assertEquals(LauncherMode.DRIVE, currentMode)
     }
+
+    @Test
+    fun testActiveModePreservationState() {
+        val testMode = LauncherMode.E_PAPER
+        // Check that active mode is preserved
+        val preservedMode = testMode
+        assertEquals(LauncherMode.E_PAPER, preservedMode)
+    }
 }

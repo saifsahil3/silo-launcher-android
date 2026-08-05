@@ -38,19 +38,32 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import android.app.NotificationManager
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DoNotDisturb
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Notes
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.Widgets
+import androidx.compose.material3.HorizontalDivider
+import com.example.util.DndManager
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -73,15 +86,19 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlinx.coroutines.coroutineScope
 import androidx.compose.runtime.rememberCoroutineScope
@@ -110,7 +127,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
@@ -123,12 +139,12 @@ import com.example.util.toImageBitmapSafe
 import java.util.Locale
 
 sealed class FocusWidgetData {
-    data class SystemWidget(val widgetId: Int, val label: String, val packageName: String = "", var heightDp: Int = 180) : FocusWidgetData()
-    data class BuiltInNotes(var content: String) : FocusWidgetData()
-    data class BuiltInMantra(var quoteIndex: Int) : FocusWidgetData()
-    data class BuiltInTimer(var durationMinutes: Int = 25) : FocusWidgetData()
-    data class BuiltInAudio(val title: String = "Rain & Lo-Fi Focus Sound") : FocusWidgetData()
-    data class AppShortcut(val packageName: String, val appName: String) : FocusWidgetData()
+    data class SystemWidget(val widgetId: Int, val label: String, val packageName: String = "", var heightDp: Int = 180, var widthFraction: Float = 1.0f) : FocusWidgetData()
+    data class BuiltInNotes(var content: String, var heightDp: Int = 180, var widthFraction: Float = 1.0f) : FocusWidgetData()
+    data class BuiltInMantra(var quoteIndex: Int, var heightDp: Int = 140, var widthFraction: Float = 1.0f) : FocusWidgetData()
+    data class BuiltInTimer(var durationMinutes: Int = 25, var heightDp: Int = 160, var widthFraction: Float = 1.0f) : FocusWidgetData()
+    data class BuiltInAudio(val title: String = "Rain & Lo-Fi Focus Sound", var heightDp: Int = 180, var widthFraction: Float = 1.0f) : FocusWidgetData()
+    data class AppShortcut(val packageName: String, val appName: String, var heightDp: Int = 120, var widthFraction: Float = 1.0f) : FocusWidgetData()
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -164,6 +180,7 @@ fun FocusModeScreen(
     // List of added focus widgets
     val activeWidgets = remember {
         mutableStateListOf<FocusWidgetData>(
+            FocusWidgetData.BuiltInTimer(25),
             FocusWidgetData.BuiltInNotes("Task 1: Finish Deep Work session\nTask 2: Review project pull requests"),
             FocusWidgetData.BuiltInMantra(0)
         )
@@ -210,8 +227,14 @@ private fun FocusAppsPage(
     var isTimerRunning by remember { mutableStateOf(false) }
     var timerSecondsRemaining by remember { mutableStateOf(25 * 60) }
 
+    var isDndExpanded by remember { mutableStateOf(false) }
+    var selectedDndFilter by remember {
+        mutableIntStateOf(DndManager.getDndInterruptionFilter(context))
+    }
+    var autoDndOnFocus by remember { mutableStateOf(true) }
+
     LaunchedEffect(Unit) {
-        val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+        val timeFormat = SimpleDateFormat("h:mm", Locale.getDefault())
         val dateFormat = SimpleDateFormat("EEEE, d MMMM", Locale.getDefault())
         while (true) {
             val now = Date()
@@ -228,11 +251,14 @@ private fun FocusAppsPage(
         }
         if (timerSecondsRemaining <= 0) {
             isTimerRunning = false
+            if (autoDndOnFocus && DndManager.isNotificationPolicyAccessGranted(context)) {
+                DndManager.setDndInterruptionFilter(context, NotificationManager.INTERRUPTION_FILTER_ALL)
+            }
         }
     }
 
     val focusApps = remember(allApps, allowedPackages) {
-        allApps.filter { allowedPackages.contains(it.packageName) }
+        allowedPackages.mapNotNull { pkg -> allApps.find { it.packageName == pkg } }
     }
 
     Column(
@@ -313,23 +339,75 @@ private fun FocusAppsPage(
                     fontSize = 16.sp
                 )
             } else {
-                focusApps.forEach { appInfo ->
+                focusApps.forEachIndexed { index, appInfo ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { viewModel.launchApp(context, appInfo) }
-                            .padding(vertical = 8.dp)
-                            .testTag("focus_app_${appInfo.packageName}")
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
                             text = appInfo.label.uppercase(Locale.getDefault()),
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White.copy(alpha = 0.9f),
-                            letterSpacing = 1.sp
+                            letterSpacing = 1.sp,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { viewModel.launchApp(context, appInfo) }
+                                .padding(vertical = 8.dp)
+                                .testTag("focus_app_${appInfo.packageName}")
                         )
+
+                        // Move Up / Move Down Reordering Buttons
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            if (index > 0) {
+                                IconButton(
+                                    onClick = {
+                                        val currentList = focusApps.map { it.packageName }.toMutableList()
+                                        val temp = currentList[index]
+                                        currentList[index] = currentList[index - 1]
+                                        currentList[index - 1] = temp
+                                        viewModel.reorderFocusAllowedPackages(currentList)
+                                    },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.KeyboardArrowUp,
+                                        contentDescription = "Move Up",
+                                        tint = Color.White.copy(alpha = 0.4f),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            } else {
+                                Spacer(modifier = Modifier.size(28.dp))
+                            }
+
+                            if (index < focusApps.size - 1) {
+                                IconButton(
+                                    onClick = {
+                                        val currentList = focusApps.map { it.packageName }.toMutableList()
+                                        val temp = currentList[index]
+                                        currentList[index] = currentList[index + 1]
+                                        currentList[index + 1] = temp
+                                        viewModel.reorderFocusAllowedPackages(currentList)
+                                    },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.KeyboardArrowDown,
+                                        contentDescription = "Move Down",
+                                        tint = Color.White.copy(alpha = 0.4f),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            } else {
+                                Spacer(modifier = Modifier.size(28.dp))
+                            }
+                        }
                     }
                 }
             }
@@ -353,73 +431,102 @@ private fun FocusAppsPage(
         }
 
         Spacer(modifier = Modifier.height(24.dp))
+        
+        com.example.ui.components.RopeFidgetWidget()
 
-        // Pomodoro Card
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF1B1B22)),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Timer,
-                        contentDescription = "Timer",
-                        tint = Color(0xFFCE93D8)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        val mins = timerSecondsRemaining / 60
-                        val secs = timerSecondsRemaining % 60
-                        val timeText = String.format("%02d:%02d", mins, secs)
-                        Text(
-                            text = "Focus Timer: $timeText",
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            fontSize = 15.sp
-                        )
-                        Text(
-                            text = if (isTimerRunning) "Deep Focus running..." else "25-min session ready",
-                            fontSize = 12.sp,
-                            color = Color.White.copy(alpha = 0.6f)
-                        )
+        Spacer(modifier = Modifier.height(24.dp))
+
+    var showDndChooserDialog by remember { mutableStateOf(false) }
+    var showDndPermissionDialog by remember { mutableStateOf(false) }
+
+    if (showDndPermissionDialog) {
+        DndPermissionDialog(
+            onDismiss = { showDndPermissionDialog = false },
+            onGrant = { DndManager.openNotificationPolicySettings(context) }
+        )
+    }
+
+    if (showDndChooserDialog) {
+        DndChooserDialog(
+            selectedFilter = selectedDndFilter,
+            onSelectFilter = { filter ->
+                selectedDndFilter = filter
+                if (filter != NotificationManager.INTERRUPTION_FILTER_ALL) {
+                    if (!DndManager.isNotificationPolicyAccessGranted(context)) {
+                        showDndPermissionDialog = true
+                    } else {
+                        DndManager.setDndInterruptionFilter(context, filter)
+                    }
+                } else {
+                    if (DndManager.isNotificationPolicyAccessGranted(context)) {
+                        DndManager.setDndInterruptionFilter(context, NotificationManager.INTERRUPTION_FILTER_ALL)
                     }
                 }
+            },
+            onDismiss = { showDndChooserDialog = false }
+        )
+    }
 
-                Row {
-                    IconButton(
-                        onClick = { isTimerRunning = !isTimerRunning },
-                        modifier = Modifier.testTag("toggle_focus_timer_button")
-                    ) {
-                        Icon(
-                            imageVector = if (isTimerRunning) Icons.Default.Timer else Icons.Default.PlayArrow,
-                            contentDescription = "Toggle Timer",
-                            tint = Color.White
-                        )
-                    }
-                    IconButton(
-                        onClick = {
-                            isTimerRunning = false
-                            timerSecondsRemaining = 25 * 60
-                        }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Reset Timer",
-                            tint = Color.White.copy(alpha = 0.6f)
-                        )
-                    }
+    val dndLabel = when (selectedDndFilter) {
+        NotificationManager.INTERRUPTION_FILTER_PRIORITY -> "Do Not Disturb • Priority Only"
+        NotificationManager.INTERRUPTION_FILTER_ALARMS -> "Do Not Disturb • Alarms Only"
+        NotificationManager.INTERRUPTION_FILTER_NONE -> "Do Not Disturb • Total Silence"
+        else -> "Do Not Disturb • Off"
+    }
+
+    // Ultra-Minimalist Single Line DND Card
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = Color(0xFF16171D),
+        border = BorderStroke(1.dp, Color(0xFF242630)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .clickable {
+                if (!DndManager.isNotificationPolicyAccessGranted(context)) {
+                    showDndPermissionDialog = true
+                } else {
+                    showDndChooserDialog = true
                 }
             }
+            .padding(bottom = 16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.DoNotDisturb,
+                    contentDescription = null,
+                    tint = if (selectedDndFilter != NotificationManager.INTERRUPTION_FILTER_ALL) Color(0xFF94A3B8) else Color.White.copy(alpha = 0.4f),
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = dndLabel,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White.copy(alpha = 0.9f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Icon(
+                imageVector = Icons.Default.Edit,
+                contentDescription = "Change DND Mode",
+                tint = Color.White.copy(alpha = 0.5f),
+                modifier = Modifier.size(16.dp)
+            )
         }
+    }
     }
 
     if (showCustomizeDialog) {
@@ -500,6 +607,356 @@ private fun FocusAppsPage(
 }
 
 @Composable
+private fun DndPermissionDialog(
+    onDismiss: () -> Unit,
+    onGrant: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = Color(0xFF1E1E26),
+            border = BorderStroke(1.dp, Color(0xFFA78BFA).copy(alpha = 0.4f)),
+            tonalElevation = 10.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFF7C3AED).copy(alpha = 0.2f),
+                    modifier = Modifier.size(54.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.DoNotDisturb,
+                            contentDescription = null,
+                            tint = Color(0xFFA78BFA),
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(14.dp))
+                Text(
+                    text = "DND Access Required",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "To let Silo automatically manage Do Not Disturb mode during your focus sessions, please grant notification policy permission in System Settings.",
+                    fontSize = 13.sp,
+                    color = Color.White.copy(alpha = 0.7f),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(20.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Cancel", color = Color.White.copy(alpha = 0.8f))
+                    }
+                    Button(
+                        onClick = {
+                            onGrant()
+                            onDismiss()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF475569)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Grant Access", fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DndChooserDialog(
+    selectedFilter: Int,
+    onSelectFilter: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val dndOptions = listOf(
+        Triple(NotificationManager.INTERRUPTION_FILTER_ALL, "Off", Icons.Default.NotificationsActive to "Normal notification behavior"),
+        Triple(NotificationManager.INTERRUPTION_FILTER_PRIORITY, "Priority Only", Icons.Default.Star to "Starred contacts & priority calls"),
+        Triple(NotificationManager.INTERRUPTION_FILTER_ALARMS, "Alarms Only", Icons.Default.Alarm to "Alarms & scheduled timers"),
+        Triple(NotificationManager.INTERRUPTION_FILTER_NONE, "Total Silence", Icons.Default.VolumeOff to "All sounds and vibrations muted")
+    )
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(22.dp),
+            color = Color(0xFF16171D),
+            border = BorderStroke(1.dp, Color(0xFF282B36)),
+            tonalElevation = 8.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                Text(
+                    text = "Do Not Disturb Mode",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    dndOptions.forEach { (filter, label, pair) ->
+                        val (icon, desc) = pair
+                        val isSelected = selectedFilter == filter
+
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isSelected) Color(0xFF242632) else Color(0xFF1B1C22),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isSelected) Color(0xFF64748B) else Color(0xFF22242D)
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable {
+                                    onSelectFilter(filter)
+                                    onDismiss()
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = null,
+                                        tint = if (isSelected) Color.White else Color(0xFF94A3B8),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(
+                                            text = label,
+                                            fontSize = 13.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                            color = Color.White
+                                        )
+                                        Text(
+                                            text = desc,
+                                            fontSize = 11.sp,
+                                            color = Color.White.copy(alpha = 0.45f)
+                                        )
+                                    }
+                                }
+
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun StockWidgetEditWrapper(
+    isEditing: Boolean,
+    widthFraction: Float,
+    heightDp: Int,
+    onWidthFractionChange: (Float) -> Unit,
+    onHeightDpChange: (Int) -> Unit,
+    onRemove: () -> Unit,
+    onLongPress: () -> Unit,
+    onDismissEdit: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    var curWidth by remember(widthFraction) { mutableFloatStateOf(widthFraction) }
+    var curHeight by remember(heightDp) { mutableIntStateOf(heightDp) }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth(curWidth)
+            .padding(vertical = 4.dp)
+            .pointerInput(isEditing) {
+                if (!isEditing) {
+                    coroutineScope {
+                        var longPressJob: kotlinx.coroutines.Job? = null
+                        awaitEachGesture {
+                            val down = awaitFirstDown(pass = PointerEventPass.Initial)
+                            val startPosition = down.position
+                            val slop = viewConfiguration.touchSlop
+                            
+                            longPressJob = launch {
+                                delay(viewConfiguration.longPressTimeoutMillis)
+                                onLongPress()
+                            }
+                            
+                            while (true) {
+                                val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                                val pointerChange = event.changes.firstOrNull { it.id == down.id }
+                                if (pointerChange == null || !pointerChange.pressed) {
+                                    longPressJob?.cancel()
+                                    break
+                                }
+                                val dx = pointerChange.position.x - startPosition.x
+                                val dy = pointerChange.position.y - startPosition.y
+                                if (dx * dx + dy * dy > slop * slop) {
+                                    longPressJob?.cancel()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (isEditing) {
+                        Modifier
+                            .border(
+                                width = 1.5.dp,
+                                color = Color(0xFF64748B),
+                                shape = RoundedCornerShape(18.dp)
+                            )
+                            .background(
+                                color = Color(0xFF14151B),
+                                shape = RoundedCornerShape(18.dp)
+                            )
+                            .padding(4.dp)
+                    } else {
+                        Modifier
+                    }
+                )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(curHeight.dp)
+            ) {
+                content()
+
+                // Transparent Gesture Interceptor Overlay Box placed ON TOP ONLY when editing
+                if (isEditing) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .pointerInput(Unit) {
+                                awaitEachGesture {
+                                    val down = awaitFirstDown(pass = PointerEventPass.Initial)
+                                    down.consume()
+                                    while (true) {
+                                        val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                                        event.changes.forEach { it.consume() }
+                                        if (event.changes.none { it.pressed }) break
+                                    }
+                                    onDismissEdit()
+                                }
+                            }
+                    )
+                }
+            }
+
+            // Bottom-Right Free 2D Drag Resize Handle (Horizontal, Vertical, Diagonal)
+            AnimatedVisibility(
+                visible = isEditing,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.align(Alignment.BottomEnd)
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFF334155),
+                    shadowElevation = 4.dp,
+                    modifier = Modifier
+                        .size(26.dp)
+                        .clip(CircleShape)
+                        .pointerInput(Unit) {
+                            detectDragGestures { change, dragAmount ->
+                                change.consume()
+                                // Free horizontal drag (breadth)
+                                val newW = (curWidth + (dragAmount.x / 800f)).coerceIn(0.4f, 1.0f)
+                                curWidth = newW
+                                onWidthFractionChange(newW)
+
+                                // Free vertical drag (length)
+                                val newH = (curHeight + (dragAmount.y / 2f).toInt()).coerceIn(90, 500)
+                                curHeight = newH
+                                onHeightDpChange(newH)
+                            }
+                        }
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.UnfoldMore,
+                            contentDescription = "Free Drag Resize",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // Top-Right Corner Delete Badge (Stock Launcher Experience)
+        AnimatedVisibility(
+            visible = isEditing,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopEnd)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFFEF4444),
+                shadowElevation = 4.dp,
+                modifier = Modifier
+                    .size(26.dp)
+                    .clip(CircleShape)
+                    .clickable {
+                        onDismissEdit()
+                        onRemove()
+                    }
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Remove Widget",
+                        tint = Color.White,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun FocusWidgetsPage(
     allApps: List<AppInfo>,
     activeWidgets: MutableList<FocusWidgetData>,
@@ -508,6 +965,7 @@ private fun FocusWidgetsPage(
 ) {
     val context = LocalContext.current
     var showAddWidgetDialog by remember { mutableStateOf(false) }
+    var editingWidgetIndex by remember { mutableIntStateOf(-1) }
 
     var pendingWidgetId by remember { mutableIntStateOf(-1) }
     var pendingWidgetLabel by remember { mutableStateOf("") }
@@ -607,6 +1065,15 @@ private fun FocusWidgetsPage(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .pointerInput(editingWidgetIndex) {
+                if (editingWidgetIndex != -1) {
+                    detectTapGestures(
+                        onTap = {
+                            editingWidgetIndex = -1
+                        }
+                    )
+                }
+            }
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 20.dp)
     ) {
@@ -619,16 +1086,16 @@ private fun FocusWidgetsPage(
                 text = "FOCUS WIDGETS",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White,
+                color = Color.White.copy(alpha = 0.9f),
                 letterSpacing = 1.sp
             )
 
             Surface(
                 shape = CircleShape,
-                color = Color(0xFFCE93D8),
-                shadowElevation = 6.dp,
+                color = Color(0xFF334155),
+                shadowElevation = 4.dp,
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(38.dp)
                     .clip(CircleShape)
                     .clickable { showAddWidgetDialog = true }
                     .testTag("add_widget_button")
@@ -637,27 +1104,27 @@ private fun FocusWidgetsPage(
                     Icon(
                         imageVector = Icons.Default.Add,
                         contentDescription = "Add Widget",
-                        tint = Color.Black,
-                        modifier = Modifier.size(22.dp)
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         if (activeWidgets.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(200.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0xFF1B1B22)),
+                    .height(180.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(Color(0xFF16171D)),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "No widgets added yet.\nTap '+' to add widgets.",
-                    color = Color.White.copy(alpha = 0.5f),
+                    color = Color.White.copy(alpha = 0.45f),
                     fontSize = 14.sp,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
@@ -668,31 +1135,82 @@ private fun FocusWidgetsPage(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 activeWidgets.forEachIndexed { index, widgetData ->
-                    Box(modifier = Modifier.fillMaxWidth()) {
+                    val (hDp, wFrac) = when (widgetData) {
+                        is FocusWidgetData.BuiltInNotes -> widgetData.heightDp to widgetData.widthFraction
+                        is FocusWidgetData.BuiltInMantra -> widgetData.heightDp to widgetData.widthFraction
+                        is FocusWidgetData.BuiltInTimer -> widgetData.heightDp to widgetData.widthFraction
+                        is FocusWidgetData.BuiltInAudio -> widgetData.heightDp to widgetData.widthFraction
+                        is FocusWidgetData.AppShortcut -> widgetData.heightDp to widgetData.widthFraction
+                        is FocusWidgetData.SystemWidget -> widgetData.heightDp to widgetData.widthFraction
+                    }
+
+                    StockWidgetEditWrapper(
+                        isEditing = (editingWidgetIndex == index),
+                        widthFraction = wFrac,
+                        heightDp = hDp,
+                        onWidthFractionChange = { newW ->
+                            when (widgetData) {
+                                is FocusWidgetData.BuiltInNotes -> widgetData.widthFraction = newW
+                                is FocusWidgetData.BuiltInMantra -> widgetData.widthFraction = newW
+                                is FocusWidgetData.BuiltInTimer -> widgetData.widthFraction = newW
+                                is FocusWidgetData.BuiltInAudio -> widgetData.widthFraction = newW
+                                is FocusWidgetData.AppShortcut -> widgetData.widthFraction = newW
+                                is FocusWidgetData.SystemWidget -> widgetData.widthFraction = newW
+                            }
+                        },
+                        onHeightDpChange = { newH ->
+                            when (widgetData) {
+                                is FocusWidgetData.BuiltInNotes -> widgetData.heightDp = newH
+                                is FocusWidgetData.BuiltInMantra -> widgetData.heightDp = newH
+                                is FocusWidgetData.BuiltInTimer -> widgetData.heightDp = newH
+                                is FocusWidgetData.BuiltInAudio -> widgetData.heightDp = newH
+                                is FocusWidgetData.AppShortcut -> widgetData.heightDp = newH
+                                is FocusWidgetData.SystemWidget -> widgetData.heightDp = newH
+                            }
+                        },
+                        onRemove = {
+                            editingWidgetIndex = -1
+                            activeWidgets.removeAt(index)
+                        },
+                        onLongPress = { editingWidgetIndex = index },
+                        onDismissEdit = { editingWidgetIndex = -1 }
+                    ) {
                         when (widgetData) {
                             is FocusWidgetData.BuiltInNotes -> {
                                 BuiltInNotesWidgetCard(
                                     content = widgetData.content,
                                     onContentChange = { updated -> widgetData.content = updated },
-                                    onRemove = { activeWidgets.removeAt(index) }
+                                    onRemove = {
+                                        editingWidgetIndex = -1
+                                        activeWidgets.removeAt(index)
+                                    }
                                 )
                             }
                             is FocusWidgetData.BuiltInMantra -> {
                                 BuiltInMantraWidgetCard(
                                     quoteIndex = widgetData.quoteIndex,
                                     onNextQuote = { widgetData.quoteIndex += 1 },
-                                    onRemove = { activeWidgets.removeAt(index) }
+                                    onRemove = {
+                                        editingWidgetIndex = -1
+                                        activeWidgets.removeAt(index)
+                                    }
                                 )
                             }
                             is FocusWidgetData.BuiltInTimer -> {
                                 BuiltInTimerWidgetCard(
-                                    onRemove = { activeWidgets.removeAt(index) }
+                                    onRemove = {
+                                        editingWidgetIndex = -1
+                                        activeWidgets.removeAt(index)
+                                    }
                                 )
                             }
                             is FocusWidgetData.BuiltInAudio -> {
                                 BuiltInAudioWidgetCard(
                                     title = widgetData.title,
-                                    onRemove = { activeWidgets.removeAt(index) }
+                                    onRemove = {
+                                        editingWidgetIndex = -1
+                                        activeWidgets.removeAt(index)
+                                    }
                                 )
                             }
                             is FocusWidgetData.AppShortcut -> {
@@ -700,7 +1218,10 @@ private fun FocusWidgetsPage(
                                     packageName = widgetData.packageName,
                                     appName = widgetData.appName,
                                     allApps = allApps,
-                                    onRemove = { activeWidgets.removeAt(index) }
+                                    onRemove = {
+                                        editingWidgetIndex = -1
+                                        activeWidgets.removeAt(index)
+                                    }
                                 )
                             }
                             is FocusWidgetData.SystemWidget -> {
@@ -708,7 +1229,10 @@ private fun FocusWidgetsPage(
                                     widgetData = widgetData,
                                     appWidgetHost = appWidgetHost,
                                     appWidgetManager = appWidgetManager,
-                                    onRemove = { activeWidgets.removeAt(index) }
+                                    onRemove = {
+                                        editingWidgetIndex = -1
+                                        activeWidgets.removeAt(index)
+                                    }
                                 )
                             }
                         }
@@ -1297,14 +1821,12 @@ private fun SystemWidgetHostCard(
     widgetData: FocusWidgetData.SystemWidget,
     appWidgetHost: AppWidgetHost,
     appWidgetManager: AppWidgetManager,
-    onRemove: () -> Unit
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val widgetId = widgetData.widgetId
     val label = widgetData.label
     val packageName = widgetData.packageName
-
-    var isEditing by remember { mutableStateOf(false) }
-    var currentHeightDp by remember { mutableIntStateOf(widgetData.heightDp) }
 
     val widgetInfo = remember(widgetId) {
         if (widgetId <= 0) null
@@ -1317,380 +1839,75 @@ private fun SystemWidgetHostCard(
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .then(
-                if (isEditing) {
-                    Modifier
-                        .border(
-                            width = 2.dp,
-                            color = Color(0xFF80CBC4),
-                            shape = RoundedCornerShape(16.dp)
-                        )
-                        .background(
-                            color = Color(0xFF16161E).copy(alpha = 0.9f),
-                            shape = RoundedCornerShape(16.dp)
-                        )
-                        .padding(10.dp)
-                } else {
-                    Modifier
-                }
-            )
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            // Edit Mode Header Bar (Visible ONLY when long-pressed/editing)
-            AnimatedVisibility(
-                visible = isEditing,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Widgets,
-                                contentDescription = null,
-                                tint = Color(0xFF80CBC4),
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = label.uppercase(Locale.getDefault()),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF80CBC4),
-                                letterSpacing = 0.5.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+    Box(modifier = modifier.fillMaxSize()) {
+        if (widgetInfo != null) {
+            AndroidView(
+                factory = { ctx ->
+                    try {
+                        appWidgetHost.createView(ctx, widgetId, widgetInfo).apply {
+                            setAppWidget(widgetId, widgetInfo)
+                            layoutParams = android.view.ViewGroup.LayoutParams(
+                                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                android.view.ViewGroup.LayoutParams.MATCH_PARENT
                             )
                         }
-
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Quick Delete Button
-                            androidx.compose.material3.Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = Color(0xFFFF5252).copy(alpha = 0.2f),
-                                border = BorderStroke(1.dp, Color(0xFFFF5252)),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable {
-                                        try {
-                                            if (widgetId > 0) {
-                                                appWidgetHost.deleteAppWidgetId(widgetId)
-                                            }
-                                        } catch (e: Throwable) {
-                                            e.printStackTrace()
-                                        }
-                                        onRemove()
-                                    }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Delete Widget",
-                                        tint = Color(0xFFFF5252),
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "Delete",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFFFF5252)
-                                    )
-                                }
-                            }
-
-                            // Done Editing Button
-                            androidx.compose.material3.Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = Color(0xFF80CBC4),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable { isEditing = false }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = "Done",
-                                        tint = Color.Black,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "Done",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.Black
-                                    )
-                                }
-                            }
+                    } catch (e: Throwable) {
+                        e.printStackTrace()
+                        android.widget.TextView(ctx).apply {
+                            text = "Widget Display: $label"
+                            setPadding(32, 32, 32, 32)
+                            setTextColor(android.graphics.Color.WHITE)
                         }
                     }
-
-                    // Height Presets Row
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Height:", fontSize = 10.sp, color = Color.White.copy(alpha = 0.6f))
-                        listOf(120, 180, 260, 360).forEach { size ->
-                            val isSel = currentHeightDp == size
-                            androidx.compose.material3.Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = if (isSel) Color(0xFF80CBC4) else Color(0xFF2B2B38),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .clickable {
-                                        currentHeightDp = size
-                                        widgetData.heightDp = size
-                                    }
-                            ) {
-                                Text(
-                                    text = "${size}dp",
-                                    fontSize = 10.sp,
-                                    fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSel) Color.Black else Color.White,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Widget Content View (Holds exact height currentHeightDp.dp directly for widget content)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(currentHeightDp.dp)
-                    .pointerInput(Unit) {
-                        coroutineScope {
-                            awaitEachGesture {
-                                val down = awaitFirstDown(pass = PointerEventPass.Initial)
-                                val downTime = System.currentTimeMillis()
-                                var triggered = false
-                                while (!triggered) {
-                                    val event = awaitPointerEvent(pass = PointerEventPass.Initial)
-                                    val change = event.changes.firstOrNull { it.id == down.id }
-                                    if (change == null || !change.pressed) break
-                                    if (System.currentTimeMillis() - downTime >= 400) {
-                                        isEditing = true
-                                        triggered = true
-                                    }
-                                }
-                            }
-                        }
-                    }
-            ) {
-                if (widgetInfo != null) {
-                    LaunchedEffect(currentHeightDp) {
+                },
+                update = { view ->
+                    if (view is AppWidgetHostView) {
                         try {
+                            view.setAppWidget(widgetId, widgetInfo)
+                            val displayMetrics = view.resources.displayMetrics
+                            val density = displayMetrics.density
+                            val widthPx = if (view.width > 0) view.width else displayMetrics.widthPixels
+                            val minWidthDp = (widthPx / density).toInt().coerceAtLeast(100)
+                            val minHeightDp = widgetData.heightDp.coerceAtLeast(40)
+
                             val options = android.os.Bundle().apply {
-                                putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 100)
-                                putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, currentHeightDp)
-                                putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 500)
-                                putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, currentHeightDp)
+                                putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, minWidthDp)
+                                putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, minHeightDp)
+                                putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, minWidthDp)
+                                putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, minHeightDp)
                             }
+
+                            view.updateAppWidgetSize(options, minWidthDp, minHeightDp, minWidthDp, minHeightDp)
                             appWidgetManager.updateAppWidgetOptions(widgetId, options)
                         } catch (e: Throwable) {
                             e.printStackTrace()
                         }
                     }
-
-                    AndroidView(
-                        factory = { ctx ->
-                            try {
-                                appWidgetHost.createView(ctx, widgetId, widgetInfo).apply {
-                                    setAppWidget(widgetId, widgetInfo)
-                                    val gestureDetector = androidx.core.view.GestureDetectorCompat(
-                                        ctx,
-                                        object : android.view.GestureDetector.SimpleOnGestureListener() {
-                                            override fun onLongPress(e: android.view.MotionEvent) {
-                                                isEditing = true
-                                            }
-                                        }
-                                    )
-                                    setOnTouchListener { _, event ->
-                                        gestureDetector.onTouchEvent(event)
-                                        false
-                                    }
-                                    setOnLongClickListener {
-                                        isEditing = true
-                                        true
-                                    }
-                                    layoutParams = android.view.ViewGroup.LayoutParams(
-                                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
-                                    )
-                                }
-                            } catch (e: Throwable) {
-                                e.printStackTrace()
-                                android.widget.TextView(ctx).apply {
-                                    text = "Widget Display: $label"
-                                    setPadding(32, 32, 32, 32)
-                                    setTextColor(android.graphics.Color.WHITE)
-                                }
-                            }
-                        },
-                        update = { view ->
-                            if (view is AppWidgetHostView) {
-                                try {
-                                    view.setAppWidget(widgetId, widgetInfo)
-                                    val gestureDetector = androidx.core.view.GestureDetectorCompat(
-                                        view.context,
-                                        object : android.view.GestureDetector.SimpleOnGestureListener() {
-                                            override fun onLongPress(e: android.view.MotionEvent) {
-                                                isEditing = true
-                                            }
-                                        }
-                                    )
-                                    view.setOnTouchListener { _, event ->
-                                        gestureDetector.onTouchEvent(event)
-                                        false
-                                    }
-                                    view.setOnLongClickListener {
-                                        isEditing = true
-                                        true
-                                    }
-                                    val displayMetrics = view.resources.displayMetrics
-                                    val density = displayMetrics.density
-                                    val widthPx = if (view.width > 0) view.width else displayMetrics.widthPixels
-                                    val minWidthDp = (widthPx / density).toInt().coerceAtLeast(100)
-                                    val minHeightDp = currentHeightDp.coerceAtLeast(40)
-
-                                    val options = android.os.Bundle().apply {
-                                        putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, minWidthDp)
-                                        putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, minHeightDp)
-                                        putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, minWidthDp)
-                                        putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, minHeightDp)
-                                    }
-
-                                    view.updateAppWidgetSize(options, minWidthDp, minHeightDp, minWidthDp, minHeightDp)
-                                    appWidgetManager.updateAppWidgetOptions(widgetId, options)
-                                    view.layoutParams = android.view.ViewGroup.LayoutParams(
-                                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
-                                    )
-                                    view.requestLayout()
-                                    view.invalidate()
-                                } catch (e: Throwable) {
-                                    e.printStackTrace()
-                                }
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF252530))
-                            .padding(14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = label,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                            Text(
-                                text = if (packageName.isNotEmpty()) "$packageName (Active System Widget)" else "System Widget (ID: $widgetId)",
-                                fontSize = 11.sp,
-                                color = Color(0xFF80CBC4)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = {
-                                try {
-                                    if (widgetId > 0) {
-                                        appWidgetHost.deleteAppWidgetId(widgetId)
-                                    }
-                                } catch (e: Throwable) {
-                                    e.printStackTrace()
-                                }
-                                onRemove()
-                            },
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Remove",
-                                tint = Color.White.copy(alpha = 0.5f),
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Drag-to-Resize Handle Bar at Bottom (Visible ONLY when isEditing)
-            AnimatedVisibility(
-                visible = isEditing,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFF1E2028))
+                    .padding(14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF80CBC4).copy(alpha = 0.2f))
-                        .pointerInput(Unit) {
-                            detectVerticalDragGestures { change, dragAmount ->
-                                change.consume()
-                                val newH = (currentHeightDp + (dragAmount / 2f).toInt()).coerceIn(100, 600)
-                                currentHeightDp = newH
-                                widgetData.heightDp = newH
-                            }
-                        }
-                        .padding(vertical = 6.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.UnfoldMore,
-                            contentDescription = "Resize",
-                            tint = Color(0xFF80CBC4),
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "HOLD & DRAG TO RESIZE (${currentHeightDp}dp)",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF80CBC4),
-                            letterSpacing = 0.5.sp
-                        )
-                    }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = label,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Text(
+                        text = if (packageName.isNotEmpty()) "$packageName (System Widget)" else "System Widget (ID: $widgetId)",
+                        fontSize = 11.sp,
+                        color = Color(0xFF94A3B8)
+                    )
                 }
             }
         }

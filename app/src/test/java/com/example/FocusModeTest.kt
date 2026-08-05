@@ -156,21 +156,63 @@ class FocusModeTest {
     }
 
     @Test
-    fun testSystemWidgetHeightResizing() {
+    fun testSystemWidget2DDimensionsAndBounds() {
         val systemWidget = FocusWidgetData.SystemWidget(
             widgetId = 301,
             label = "Analog Clock",
             packageName = "com.android.deskclock",
-            heightDp = 180
+            heightDp = 180,
+            widthFraction = 1.0f
         )
         assertEquals(180, systemWidget.heightDp)
+        assertEquals(1.0f, systemWidget.widthFraction)
 
-        // Mutate heightDp as performed by resize controls
+        // Mutate length (heightDp) and breadth (widthFraction)
         systemWidget.heightDp = 260
-        assertEquals(260, systemWidget.heightDp)
+        systemWidget.widthFraction = 0.5f
 
-        systemWidget.heightDp = 360
-        assertEquals(360, systemWidget.heightDp)
+        assertEquals(260, systemWidget.heightDp)
+        assertEquals(0.5f, systemWidget.widthFraction)
+
+        // Coerce within valid bounds (90 to 500 dp, 0.4f to 1.0f)
+        systemWidget.heightDp = 600.coerceIn(90, 500)
+        systemWidget.widthFraction = 1.5f.coerceIn(0.4f, 1.0f)
+
+        assertEquals(500, systemWidget.heightDp)
+        assertEquals(1.0f, systemWidget.widthFraction)
+    }
+
+    @Test
+    fun testDefaultWidgetListIncludesTimer() {
+        val defaultWidgets = mutableListOf<FocusWidgetData>(
+            FocusWidgetData.BuiltInTimer(25),
+            FocusWidgetData.BuiltInNotes("Task 1: Finish Deep Work session"),
+            FocusWidgetData.BuiltInMantra(0)
+        )
+
+        assertEquals(3, defaultWidgets.size)
+        assertTrue(defaultWidgets[0] is FocusWidgetData.BuiltInTimer)
+        assertEquals(25, (defaultWidgets[0] as FocusWidgetData.BuiltInTimer).durationMinutes)
+    }
+
+    @Test
+    fun testFocusAppsReordering() {
+        val allApps = listOf(
+            com.example.data.AppInfo("WhatsApp", "com.whatsapp", android.content.Intent()),
+            com.example.data.AppInfo("Spotify", "com.spotify", android.content.Intent()),
+            com.example.data.AppInfo("Calendar", "com.google.calendar", android.content.Intent())
+        )
+
+        // Custom ordered allowed packages
+        val allowedPackages = setOf("com.spotify", "com.whatsapp")
+
+        // Map allowed packages to apps list using custom order
+        val focusApps = allowedPackages.mapNotNull { pkg -> allApps.find { it.packageName == pkg } }
+
+        assertEquals(2, focusApps.size)
+        // Verify custom order (Spotify first, then WhatsApp)
+        assertEquals("com.spotify", focusApps[0].packageName)
+        assertEquals("com.whatsapp", focusApps[1].packageName)
     }
 
     @Test
