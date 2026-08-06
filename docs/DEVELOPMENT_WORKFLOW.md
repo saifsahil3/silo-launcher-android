@@ -75,10 +75,8 @@ To support safe feature development without long-lived feature branches, experim
 
 ### Active Feature Flags (`FeatureFlag` Enum)
 
-- `CREATOR_MODE`: Enable Creator Mode features, analytics, and custom layout tools.
-- `NEW_WIDGET_PAGE`: Redesigned Android widget host screen.
-- `EXPERIMENTAL_SEARCH`: Experimental indexed search algorithm and web integration.
-- `NEW_SETTINGS_UI`: Modern card-based settings interface.
+- `SAMPLE_EXPERIMENTAL_FEATURE`: Template flag for guarding upcoming features during feature development.
+- New feature flags should be added directly to `FeatureFlag.kt` as enum entries when developing experimental functionality.
 
 ### Repository API
 
@@ -86,13 +84,13 @@ To support safe feature development without long-lived feature branches, experim
 val repository = FeatureFlagRepository(context)
 
 // Observe flag state continuously
-val isCreatorEnabledFlow: Flow<Boolean> = repository.isEnabled(FeatureFlag.CREATOR_MODE)
+val isEnabledFlow: Flow<Boolean> = repository.isEnabled(FeatureFlag.SAMPLE_EXPERIMENTAL_FEATURE)
 
 // One-shot check
-val isEnabled: Boolean = repository.isFeatureEnabled(FeatureFlag.CREATOR_MODE)
+val isEnabled: Boolean = repository.isFeatureEnabled(FeatureFlag.SAMPLE_EXPERIMENTAL_FEATURE)
 
 // Update flag state
-repository.setEnabled(FeatureFlag.CREATOR_MODE, true)
+repository.setEnabled(FeatureFlag.SAMPLE_EXPERIMENTAL_FEATURE, true)
 
 // Reset all flags to defaults
 repository.resetAll()

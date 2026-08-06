@@ -1,7 +1,8 @@
 package com.example.core.flag
 
 /**
- * Enumeration of all application feature flags.
+ * Enumeration of active application feature flags.
+ * Add new feature flags here to protect unfinished or experimental functionality during development.
  */
 enum class FeatureFlag(
     val key: String,
@@ -9,28 +10,10 @@ enum class FeatureFlag(
     val description: String,
     val defaultValue: Boolean = false
 ) {
-    CREATOR_MODE(
-        key = "creator_mode",
-        title = "Creator Mode",
-        description = "Enable Creator Mode features, analytics, and custom layout tools",
-        defaultValue = false
-    ),
-    NEW_WIDGET_PAGE(
-        key = "new_widget_page",
-        title = "New Widget Page",
-        description = "Enable the redesigned Android widget host screen",
-        defaultValue = false
-    ),
-    EXPERIMENTAL_SEARCH(
-        key = "experimental_search",
-        title = "Experimental Search",
-        description = "Enable experimental indexed search algorithm and web integration",
-        defaultValue = false
-    ),
-    NEW_SETTINGS_UI(
-        key = "new_settings_ui",
-        title = "New Settings UI",
-        description = "Enable modern card-based settings interface",
+    SAMPLE_EXPERIMENTAL_FEATURE(
+        key = "sample_experimental_feature",
+        title = "Sample Feature Flag",
+        description = "Template flag for guarding upcoming features during feature development",
         defaultValue = false
     );
 
