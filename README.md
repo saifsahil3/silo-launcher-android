@@ -1,6 +1,6 @@
 # Silo Android Launcher
 
-Silo is a minimal, context-shifting Android launcher built with Jetpack Compose.
+Silo is a minimal, context-shifting Android launcher built with Jetpack Compose
 
 ## Architectural Highlights & Build Flavors
 
