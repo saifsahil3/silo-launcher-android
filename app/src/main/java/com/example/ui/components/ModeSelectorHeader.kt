@@ -33,11 +33,13 @@ import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.filled.VideoCall
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -78,6 +80,7 @@ fun ModeSelectorHeader(
         LauncherMode.SLEEP -> Color(0xFF283593)
         LauncherMode.E_PAPER -> Color(0xFF8D6E63)
         LauncherMode.PASS_THROUGH -> Color(0xFF00695C)
+        LauncherMode.CREATOR -> Color(0xFF3F51B5)
     }
 
     val modeIcon = when (currentMode) {
@@ -87,6 +90,7 @@ fun ModeSelectorHeader(
         LauncherMode.SLEEP -> Icons.Default.Bedtime
         LauncherMode.E_PAPER -> Icons.AutoMirrored.Filled.MenuBook
         LauncherMode.PASS_THROUGH -> Icons.Default.Layers
+        LauncherMode.CREATOR -> Icons.Default.VideoCall
     }
 
     val modeTitle = when (currentMode) {
@@ -96,6 +100,7 @@ fun ModeSelectorHeader(
         LauncherMode.SLEEP -> "Sleep"
         LauncherMode.E_PAPER -> "E-Paper"
         LauncherMode.PASS_THROUGH -> "Pass-Through"
+        LauncherMode.CREATOR -> "Creator"
     }
 
     Box(

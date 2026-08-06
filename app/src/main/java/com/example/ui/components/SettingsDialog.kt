@@ -334,9 +334,16 @@ fun SettingsDialog(
                                 fontWeight = FontWeight.Bold
                             )
                         }
+
+                        val isDefault = viewModel.isDefaultLauncher(context)
+
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Set Silo Launcher as your default launcher, or open the native launcher chooser sheet to switch home apps.",
+                            text = if (isDefault) {
+                                "Silo Launcher is currently your default launcher. Open the native chooser sheet to switch home apps."
+                            } else {
+                                "Set Silo Launcher as your default launcher for a distraction-free experience."
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -350,7 +357,7 @@ fun SettingsDialog(
                                 .fillMaxWidth()
                                 .testTag("change_default_launcher_button")
                         ) {
-                            Text("Switch Default Launcher (Exit Silo)")
+                            Text(if (isDefault) "Switch Default Launcher (Exit Silo)" else "Set Silo as Default Launcher")
                         }
                     }
                 }

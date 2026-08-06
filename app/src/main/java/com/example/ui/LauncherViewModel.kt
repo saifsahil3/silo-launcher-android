@@ -1,8 +1,10 @@
 package com.example.ui
 
 import android.app.Application
+import android.app.Activity
 import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
@@ -15,7 +17,10 @@ import com.example.data.AppRepository
 import com.example.db.DatabaseProvider
 import com.example.db.LauncherDatabase
 import com.example.db.ModeSettingEntity
+import com.example.db.CreatorStageConfigEntity
 import com.example.model.LauncherMode
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,12 +45,19 @@ data class SleepState(
     val bedtimeAlarmTime: String = "07:00 AM"
 )
 
+data class CreatorSessionState(
+    val isActive: Boolean = false,
+    val currentStageId: String = "shoot",
+    val secondsRemaining: Int = 3600,
+    val isPaused: Boolean = false,
+    val showResumePrompt: Boolean = false
+)
+
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
 
     private val appRepository = AppRepository()
     private val db = DatabaseProvider.getDatabase(application)
     private val dao = db.modeSettingDao()
-
 
     private val _currentMode = MutableStateFlow(LauncherMode.FOCUS)
     val currentMode: StateFlow<LauncherMode> = _currentMode.asStateFlow()
@@ -66,8 +78,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     val selectedCategory: StateFlow<String> = _selectedCategory.asStateFlow()
 
     // Focus Mode
-    private val _focusAllowedPackages = MutableStateFlow<Set<String>>(emptySet())
-    val focusAllowedPackages: StateFlow<Set<String>> = _focusAllowedPackages.asStateFlow()
+    private val _focusAllowedPackages = MutableStateFlow<List<String>>(emptyList())
+    val focusAllowedPackages: StateFlow<List<String>> = _focusAllowedPackages.asStateFlow()
 
     private val _focusGoal = MutableStateFlow("Deep Work & Zero Distractions")
     val focusGoal: StateFlow<String> = _focusGoal.asStateFlow()
@@ -81,6 +93,13 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     // Sleep Mode
     private val _sleepState = MutableStateFlow(SleepState())
     val sleepState: StateFlow<SleepState> = _sleepState.asStateFlow()
+
+    // Creator Mode Session
+    private val _creatorSessionState = MutableStateFlow(CreatorSessionState())
+    val creatorSessionState: StateFlow<CreatorSessionState> = _creatorSessionState.asStateFlow()
+
+    private val _creatorStageConfigs = MutableStateFlow<Map<String, CreatorStageConfigEntity>>(emptyMap())
+    val creatorStageConfigs: StateFlow<Map<String, CreatorStageConfigEntity>> = _creatorStageConfigs.asStateFlow()
 
     // Battery State
     private val _batteryLevel = MutableStateFlow(85)
@@ -97,6 +116,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val _showPassThroughBanner = MutableStateFlow(false)
     val showPassThroughBanner: StateFlow<Boolean> = _showPassThroughBanner.asStateFlow()
 
+
     private val triggerReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val event = intent?.getStringExtra("event_type") ?: return
@@ -105,10 +125,45 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             }
         }
     }
+    private var lastScreenOffTime: Long = 0
+
+    private val creatorScreenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val action = intent?.action ?: return
+            val session = _creatorSessionState.value
+            if (!session.isActive) return
+
+            when (action) {
+                Intent.ACTION_SCREEN_OFF -> {
+                    lastScreenOffTime = System.currentTimeMillis()
+                    _creatorSessionState.value = _creatorSessionState.value.copy(isPaused = true)
+                }
+                Intent.ACTION_USER_PRESENT -> {
+                    val now = System.currentTimeMillis()
+                    if (lastScreenOffTime > 0) {
+                        val durationLockedMinutes = (now - lastScreenOffTime) / 1000 / 60
+                        if (durationLockedMinutes >= 30) {
+                            finishCreatorSession()
+                        } else {
+                            _creatorSessionState.value = _creatorSessionState.value.copy(
+                                showResumePrompt = true
+                            )
+                        }
+                    } else {
+                        _creatorSessionState.value = _creatorSessionState.value.copy(
+                            showResumePrompt = true
+                        )
+                    }
+                }
+            }
+        }
+    }
+
 
     init {
         loadInstalledApps()
         loadSettingsFromDb()
+        loadCreatorStageConfigs()
         registerBatteryReceiver()
 
         // Register internal trigger receiver safely
@@ -122,7 +177,19 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         } catch (e: Throwable) {
             e.printStackTrace()
         }
+
+        // Register screen lock broadcast receiver for Creator Mode
+        try {
+            val creatorFilter = IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_USER_PRESENT)
+            }
+            getApplication<Application>().registerReceiver(creatorScreenReceiver, creatorFilter)
+        } catch (e: Throwable) {
+            e.printStackTrace()
+        }
     }
+
 
     private fun loadSettingsFromDb() {
         viewModelScope.launch {
@@ -146,7 +213,6 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                     _focusAllowedPackages.value = current.focusAllowedPackages.split(",")
                         .map { it.trim() }
                         .filter { it.isNotEmpty() }
-                        .toSet()
 
                     _driveFavoritePackages.value = current.driveFavoritePackages.split(",")
                         .map { it.trim() }
@@ -169,7 +235,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
             // Default focus allowed packages if empty
             if (_focusAllowedPackages.value.isEmpty()) {
-                val defaults = apps.take(4).map { it.packageName }.toSet()
+                val defaults = apps.take(4).map { it.packageName }
                 _focusAllowedPackages.value = defaults
             }
 
@@ -199,7 +265,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun toggleFocusPackage(packageName: String) {
-        val current = _focusAllowedPackages.value.toMutableSet()
+        val current = _focusAllowedPackages.value.toMutableList()
         if (current.contains(packageName)) {
             if (current.size > 1) { // Keep at least one app
                 current.remove(packageName)
@@ -214,12 +280,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun reorderFocusAllowedPackages(newOrder: List<String>) {
-        val uniqueSet = newOrder.toSet()
-        _focusAllowedPackages.value = uniqueSet
-        saveFocusPackagesToDb(uniqueSet)
+        _focusAllowedPackages.value = newOrder
+        saveFocusPackagesToDb(newOrder)
     }
 
-    private fun saveFocusPackagesToDb(packages: Set<String>) {
+    private fun saveFocusPackagesToDb(packages: List<String>) {
         viewModelScope.launch {
             val stringVal = packages.joinToString(",")
             val updated = _settings.value.copy(focusAllowedPackages = stringVal)
@@ -306,37 +371,72 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun triggerSystemHomePicker(context: Context) {
-        try {
+    fun isDefaultLauncher(context: Context): Boolean {
+        return try {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                 val roleManager = context.getSystemService(android.app.role.RoleManager::class.java)
+                roleManager?.isRoleHeld(android.app.role.RoleManager.ROLE_HOME) == true
+            } else {
+                val intent = Intent(Intent.ACTION_MAIN).apply {
+                    addCategory(Intent.CATEGORY_HOME)
+                }
+                val resolveInfo = context.packageManager.resolveActivity(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+                resolveInfo?.activityInfo?.packageName == context.packageName
+            }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun Context.findActivity(): Activity? {
+        var context = this
+        while (context is ContextWrapper) {
+            if (context is Activity) {
+                return context
+            }
+            context = context.baseContext
+        }
+        return null
+    }
+
+    fun triggerSystemHomePicker(context: Context) {
+        val activity = context.findActivity()
+        val targetContext = activity ?: context
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                val roleManager = targetContext.getSystemService(android.app.role.RoleManager::class.java)
                 if (roleManager != null && roleManager.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME)) {
                     if (!roleManager.isRoleHeld(android.app.role.RoleManager.ROLE_HOME)) {
-                        val roleIntent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME).apply {
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        val roleIntent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME)
+                        if (activity == null) {
+                            roleIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         }
-                        context.startActivity(roleIntent)
+                        targetContext.startActivity(roleIntent)
                         return
                     }
                 }
             }
-            val intent = Intent(android.provider.Settings.ACTION_HOME_SETTINGS).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            val intent = Intent(android.provider.Settings.ACTION_HOME_SETTINGS)
+            if (activity == null) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            context.startActivity(intent)
+            targetContext.startActivity(intent)
         } catch (e: Exception) {
             try {
-                val fallbackIntent = Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                val fallbackIntent = Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+                if (activity == null) {
+                    fallbackIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
-                context.startActivity(fallbackIntent)
+                targetContext.startActivity(fallbackIntent)
             } catch (err: Exception) {
                 try {
                     val mainHomeIntent = Intent(Intent.ACTION_MAIN).apply {
                         addCategory(Intent.CATEGORY_HOME)
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        if (activity == null) {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
                     }
-                    context.startActivity(Intent.createChooser(mainHomeIntent, "Select Default Home Launcher"))
+                    targetContext.startActivity(Intent.createChooser(mainHomeIntent, "Select Default Home Launcher"))
                 } catch (ex: Exception) {
                     ex.printStackTrace()
                 }
@@ -390,6 +490,166 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    private fun loadCreatorStageConfigs() {
+        viewModelScope.launch {
+            try {
+                dao.getAllStageConfigsFlow().collectLatest { list ->
+                    if (list.isEmpty()) {
+                        populateDefaultCreatorConfigs()
+                    } else {
+                        _creatorStageConfigs.value = list.associateBy { it.stageId }
+                    }
+                }
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private suspend fun populateDefaultCreatorConfigs() {
+        val defaultShoot = CreatorStageConfigEntity(
+            stageId = "shoot",
+            sessionDurationMinutes = 60,
+            primaryApps = "com.google.android.GoogleCamera,com.android.camera",
+            supportApps = "com.google.android.apps.photos,com.android.documentsui,com.google.android.keep,com.openai.chatgpt"
+        )
+        val defaultEdit = CreatorStageConfigEntity(
+            stageId = "edit",
+            sessionDurationMinutes = 60,
+            primaryApps = "com.capcut.android,com.lenovo.videoplayer",
+            supportApps = "com.google.android.apps.photos,com.google.android.apps.docs,com.android.documentsui,com.google.android.music"
+        )
+        val defaultPublish = CreatorStageConfigEntity(
+            stageId = "publish",
+            sessionDurationMinutes = 60,
+            primaryApps = "com.instagram.android,com.google.android.apps.youtube.creator",
+            supportApps = "com.canva.editor,com.google.android.apps.tachyon,com.google.android.apps.photos,com.google.android.apps.docs"
+        )
+        dao.saveStageConfig(defaultShoot)
+        dao.saveStageConfig(defaultEdit)
+        dao.saveStageConfig(defaultPublish)
+    }
+
+    private var timerJob: Job? = null
+
+    fun startCreatorSession(stageId: String) {
+        val config = _creatorStageConfigs.value[stageId] ?: CreatorStageConfigEntity(stageId)
+        val durationSeconds = config.sessionDurationMinutes * 60
+        _creatorSessionState.value = CreatorSessionState(
+            isActive = true,
+            currentStageId = stageId,
+            secondsRemaining = durationSeconds,
+            isPaused = true,
+            showResumePrompt = false
+        )
+        startTimerLoop()
+    }
+
+    private fun startTimerLoop() {
+        timerJob?.cancel()
+        timerJob = viewModelScope.launch {
+            while (true) {
+                delay(1000)
+                val current = _creatorSessionState.value
+                if (current.isActive && !current.isPaused) {
+                    val nextSeconds = current.secondsRemaining - 1
+                    if (nextSeconds <= 0) {
+                        _creatorSessionState.value = current.copy(
+                            secondsRemaining = 0
+                        )
+                        break
+                    } else {
+                        _creatorSessionState.value = current.copy(secondsRemaining = nextSeconds)
+                    }
+                }
+            }
+        }
+    }
+
+    fun pauseCreatorSession() {
+        _creatorSessionState.value = _creatorSessionState.value.copy(isPaused = true)
+    }
+
+    fun resumeCreatorSession() {
+        _creatorSessionState.value = _creatorSessionState.value.copy(
+            isPaused = false,
+            showResumePrompt = false
+        )
+    }
+
+    fun extendCreatorSession(minutes: Int) {
+        val current = _creatorSessionState.value
+        val newSeconds = current.secondsRemaining + (minutes * 60)
+        _creatorSessionState.value = current.copy(
+            secondsRemaining = newSeconds,
+            isPaused = false,
+            showResumePrompt = false
+        )
+        startTimerLoop()
+    }
+
+    fun finishCreatorSession() {
+        timerJob?.cancel()
+        _creatorSessionState.value = CreatorSessionState()
+    }
+
+    fun switchStage(stageId: String) {
+        val config = _creatorStageConfigs.value[stageId] ?: CreatorStageConfigEntity(stageId)
+        val durationSeconds = config.sessionDurationMinutes * 60
+        _creatorSessionState.value = _creatorSessionState.value.copy(
+            currentStageId = stageId,
+            secondsRemaining = durationSeconds,
+            isPaused = true,
+            showResumePrompt = false
+        )
+        startTimerLoop()
+    }
+
+    fun updateStageApps(stageId: String, primary: List<String>, support: List<String>) {
+        viewModelScope.launch {
+            try {
+                val currentConfig = _creatorStageConfigs.value[stageId] ?: CreatorStageConfigEntity(stageId)
+                val updatedConfig = currentConfig.copy(
+                    primaryApps = primary.joinToString(","),
+                    supportApps = support.joinToString(",")
+                )
+                dao.saveStageConfig(updatedConfig)
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun updateStageDuration(stageId: String, minutes: Int) {
+        viewModelScope.launch {
+            try {
+                val currentConfig = _creatorStageConfigs.value[stageId] ?: CreatorStageConfigEntity(stageId)
+                val updatedConfig = currentConfig.copy(sessionDurationMinutes = minutes)
+                dao.saveStageConfig(updatedConfig)
+
+                // Update active timer immediately if we are configuring the active stage
+                val activeSession = _creatorSessionState.value
+                if (activeSession.isActive && activeSession.currentStageId == stageId) {
+                    _creatorSessionState.value = activeSession.copy(
+                        secondsRemaining = minutes * 60
+                    )
+                }
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun resetCreatorConfigurations() {
+        viewModelScope.launch {
+            try {
+                dao.clearAllStageConfigs()
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         try {
@@ -402,5 +662,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         } catch (e: Exception) {
             // ignore
         }
+        try {
+            getApplication<Application>().unregisterReceiver(creatorScreenReceiver)
+        } catch (e: Exception) {
+            // ignore
+        }
+        timerJob?.cancel()
     }
+
 }

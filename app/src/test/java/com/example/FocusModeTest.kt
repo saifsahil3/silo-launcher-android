@@ -225,7 +225,8 @@ class FocusModeTest {
         assertTrue(modes.contains(LauncherMode.DRIVE))
         assertTrue(modes.contains(LauncherMode.SLEEP))
         assertTrue(modes.contains(LauncherMode.E_PAPER))
-        assertEquals(6, modes.size)
+        assertTrue(modes.contains(LauncherMode.CREATOR))
+        assertEquals(7, modes.size)
     }
 }
 

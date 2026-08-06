@@ -33,6 +33,15 @@ data class PinnedAppEntity(
     val customLabel: String? = null
 )
 
+@Entity(tableName = "creator_stage_configs")
+data class CreatorStageConfigEntity(
+    @PrimaryKey val stageId: String,  // "shoot", "edit", "publish"
+    val sessionDurationMinutes: Int = 60,
+    val primaryApps: String = "",     // Comma-separated package list
+    val supportApps: String = "",     // Comma-separated package list
+    val widgetIds: String = ""        // Comma-separated widget configs/IDs
+)
+
 @Dao
 interface ModeSettingDao {
     @Query("SELECT * FROM mode_settings WHERE id = 1")
@@ -52,13 +61,30 @@ interface ModeSettingDao {
 
     @Query("DELETE FROM pinned_apps WHERE packageName = :packageName AND modeName = :mode")
     suspend fun deletePinnedApp(packageName: String, mode: String)
+
+    @Query("SELECT * FROM creator_stage_configs WHERE stageId = :stageId")
+    suspend fun getStageConfig(stageId: String): CreatorStageConfigEntity?
+
+    @Query("SELECT * FROM creator_stage_configs")
+    fun getAllStageConfigsFlow(): Flow<List<CreatorStageConfigEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveStageConfig(config: CreatorStageConfigEntity)
+
+    @Query("DELETE FROM creator_stage_configs")
+    suspend fun clearAllStageConfigs()
 }
 
 @Database(
-    entities = [ModeSettingEntity::class, PinnedAppEntity::class],
-    version = 2,
+    entities = [
+        ModeSettingEntity::class,
+        PinnedAppEntity::class,
+        CreatorStageConfigEntity::class
+    ],
+    version = 3,
     exportSchema = false
 )
 abstract class LauncherDatabase : RoomDatabase() {
     abstract fun modeSettingDao(): ModeSettingDao
 }
+

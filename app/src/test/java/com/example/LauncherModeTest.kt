@@ -17,6 +17,6 @@ class LauncherModeTest {
 
     @Test
     fun testLauncherModeCount() {
-        assertEquals(6, LauncherMode.values().size)
+        assertEquals(7, LauncherMode.values().size)
     }
 }

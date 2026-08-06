@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.filled.VideoCall
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -105,6 +106,7 @@ fun FloatingModeControl(
         LauncherMode.SLEEP -> Color(0xFF283593)
         LauncherMode.E_PAPER -> Color(0xFF8D6E63)
         LauncherMode.PASS_THROUGH -> Color(0xFF00695C)
+        LauncherMode.CREATOR -> Color(0xFF3F51B5)
     }
 
     val modeIcon = when (currentMode) {
@@ -114,6 +116,7 @@ fun FloatingModeControl(
         LauncherMode.SLEEP -> Icons.Default.Bedtime
         LauncherMode.E_PAPER -> Icons.AutoMirrored.Filled.MenuBook
         LauncherMode.PASS_THROUGH -> Icons.Default.Layers
+        LauncherMode.CREATOR -> Icons.Default.VideoCall
     }
 
     Box(
@@ -270,7 +273,20 @@ fun FloatingModeControl(
                             }
                         )
 
-                        // 6. Pass-Through Mode (if enabled)
+                        // 6. Creator Mode
+                        FloatingModeOption(
+                            mode = LauncherMode.CREATOR,
+                            currentMode = currentMode,
+                            icon = Icons.Default.VideoCall,
+                            label = "Creator",
+                            accentColor = Color(0xFF3F51B5),
+                            onSelect = {
+                                menuState = FloatingMenuState.CLOSED
+                                onModeSelected(LauncherMode.CREATOR)
+                            }
+                        )
+
+                        // 7. Pass-Through Mode (if enabled)
                         if (enablePassThroughMode) {
                             FloatingModeOption(
                                 mode = LauncherMode.PASS_THROUGH,
@@ -286,6 +302,7 @@ fun FloatingModeControl(
                                 }
                             )
                         }
+
 
                         HorizontalDivider(
                             color = Color.White.copy(alpha = 0.12f),

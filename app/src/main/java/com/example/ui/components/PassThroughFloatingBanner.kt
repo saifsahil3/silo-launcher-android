@@ -5,6 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -40,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
+import com.example.util.toImageBitmapSafe
 
 @Composable
 fun PassThroughFloatingBanner(
@@ -50,22 +52,32 @@ fun PassThroughFloatingBanner(
 ) {
     AnimatedVisibility(
         visible = isVisible,
-        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+        enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+        exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
         modifier = modifier
     ) {
         Surface(
             shape = CircleShape,
             color = Color(0xFF00695C),
-            shadowElevation = 12.dp,
+            tonalElevation = 8.dp,
+            shadowElevation = 8.dp,
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
             modifier = Modifier
-                .padding(16.dp)
-                .graphicsLayer { alpha = 0.5f } // 50% transparency for subtle floating overlay
-                .border(2.dp, Color(0xFF80CBC4), CircleShape)
+                .padding(top = 40.dp)
                 .clip(CircleShape)
                 .clickable { onReturnToMorphLauncher() }
                 .testTag("passthrough_floating_banner")
         ) {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val logoBitmap = androidx.compose.runtime.remember(context) {
+                try {
+                    androidx.core.content.ContextCompat.getDrawable(context, com.example.R.mipmap.ic_launcher_round)?.toImageBitmapSafe()
+                        ?: androidx.core.content.ContextCompat.getDrawable(context, com.example.R.mipmap.ic_launcher)?.toImageBitmapSafe()
+                } catch (e: Throwable) {
+                    null
+                }
+            }
+
             Row(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -77,11 +89,20 @@ fun PassThroughFloatingBanner(
                         .clip(CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Image(
-                        painter = painterResource(id = R.mipmap.ic_launcher_round),
-                        contentDescription = "Silo Launcher App Logo",
-                        modifier = Modifier.size(28.dp)
-                    )
+                    if (logoBitmap != null) {
+                        Image(
+                            bitmap = logoBitmap,
+                            contentDescription = "Silo Launcher App Logo",
+                            modifier = Modifier.size(28.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.SwapHoriz,
+                            contentDescription = "Silo Launcher App Logo",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.width(8.dp))

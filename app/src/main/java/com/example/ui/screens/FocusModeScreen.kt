@@ -152,7 +152,7 @@ sealed class FocusWidgetData {
 fun FocusModeScreen(
     viewModel: LauncherViewModel,
     allApps: List<AppInfo>,
-    allowedPackages: Set<String>,
+    allowedPackages: List<String>,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -216,10 +216,11 @@ fun FocusModeScreen(
 private fun FocusAppsPage(
     viewModel: LauncherViewModel,
     allApps: List<AppInfo>,
-    allowedPackages: Set<String>
+    allowedPackages: List<String>
 ) {
     val context = LocalContext.current
     var showCustomizeDialog by remember { mutableStateOf(false) }
+    var isEditMode by remember { mutableStateOf(false) }
 
     var currentTimeString by remember { mutableStateOf("") }
     var currentDateString by remember { mutableStateOf("") }
@@ -324,13 +325,30 @@ private fun FocusAppsPage(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(
-                text = "ALLOWED APPS (${focusApps.size}/5)",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White.copy(alpha = 0.4f),
-                letterSpacing = 2.sp
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "ALLOWED APPS (${focusApps.size}/6)",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White.copy(alpha = 0.4f),
+                    letterSpacing = 2.sp
+                )
+                IconButton(
+                    onClick = { isEditMode = !isEditMode },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isEditMode) Icons.Default.Check else Icons.Default.Edit,
+                        contentDescription = if (isEditMode) "Done editing" else "Edit Focus Apps",
+                        tint = Color(0xFFCE93D8),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
 
             if (focusApps.isEmpty()) {
                 Text(
@@ -354,79 +372,106 @@ private fun FocusAppsPage(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(8.dp))
-                                .clickable { viewModel.launchApp(context, appInfo) }
+                                .clickable(enabled = !isEditMode) { viewModel.launchApp(context, appInfo) }
                                 .padding(vertical = 8.dp)
                                 .testTag("focus_app_${appInfo.packageName}")
                         )
 
-                        // Move Up / Move Down Reordering Buttons
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            if (index > 0) {
-                                IconButton(
-                                    onClick = {
-                                        val currentList = focusApps.map { it.packageName }.toMutableList()
-                                        val temp = currentList[index]
-                                        currentList[index] = currentList[index - 1]
-                                        currentList[index - 1] = temp
-                                        viewModel.reorderFocusAllowedPackages(currentList)
-                                    },
-                                    modifier = Modifier.size(28.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.KeyboardArrowUp,
-                                        contentDescription = "Move Up",
-                                        tint = Color.White.copy(alpha = 0.4f),
-                                        modifier = Modifier.size(18.dp)
-                                    )
+                        if (isEditMode) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                if (index > 0) {
+                                    IconButton(
+                                        onClick = {
+                                            val currentList = focusApps.map { it.packageName }.toMutableList()
+                                            val temp = currentList[index]
+                                            currentList[index] = currentList[index - 1]
+                                            currentList[index - 1] = temp
+                                            viewModel.reorderFocusAllowedPackages(currentList)
+                                        },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.KeyboardArrowUp,
+                                            contentDescription = "Move Up",
+                                            tint = Color.White.copy(alpha = 0.4f),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                } else {
+                                    Spacer(modifier = Modifier.size(28.dp))
                                 }
-                            } else {
-                                Spacer(modifier = Modifier.size(28.dp))
-                            }
 
-                            if (index < focusApps.size - 1) {
+                                if (index < focusApps.size - 1) {
+                                    IconButton(
+                                        onClick = {
+                                            val currentList = focusApps.map { it.packageName }.toMutableList()
+                                            val temp = currentList[index]
+                                            currentList[index] = currentList[index + 1]
+                                            currentList[index + 1] = temp
+                                            viewModel.reorderFocusAllowedPackages(currentList)
+                                        },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.KeyboardArrowDown,
+                                            contentDescription = "Move Down",
+                                            tint = Color.White.copy(alpha = 0.4f),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                } else {
+                                    Spacer(modifier = Modifier.size(28.dp))
+                                }
+
+                                Spacer(modifier = Modifier.width(4.dp))
+
                                 IconButton(
                                     onClick = {
-                                        val currentList = focusApps.map { it.packageName }.toMutableList()
-                                        val temp = currentList[index]
-                                        currentList[index] = currentList[index + 1]
-                                        currentList[index + 1] = temp
-                                        viewModel.reorderFocusAllowedPackages(currentList)
+                                        viewModel.toggleFocusPackage(appInfo.packageName)
                                     },
                                     modifier = Modifier.size(28.dp)
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.KeyboardArrowDown,
-                                        contentDescription = "Move Down",
-                                        tint = Color.White.copy(alpha = 0.4f),
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Remove App",
+                                        tint = Color(0xFFEF4444),
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
-                            } else {
-                                Spacer(modifier = Modifier.size(28.dp))
                             }
                         }
                     }
                 }
             }
 
-            OutlinedButton(
-                onClick = { showCustomizeDialog = true },
-                shape = RoundedCornerShape(20.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFCE93D8)),
-                modifier = Modifier
-                    .padding(top = 4.dp)
-                    .testTag("customize_focus_apps_button")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Customize Focus List")
+            if (isEditMode && focusApps.size < 6) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { showCustomizeDialog = true }
+                        .padding(vertical = 12.dp)
+                        .testTag("customize_focus_apps_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Add Focus App",
+                        tint = Color(0xFFCE93D8),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "ADD FOCUS APP",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFCE93D8),
+                        letterSpacing = 1.sp
+                    )
+                }
             }
         }
 
@@ -550,7 +595,7 @@ private fun FocusAppsPage(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Select Focus Apps (Max 5)",
+                            text = "Select Focus Apps (Max 6)",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -585,7 +630,7 @@ private fun FocusAppsPage(
                                 )
                                 Checkbox(
                                     checked = isChecked,
-                                    onCheckedChange = { viewModel.toggleFocusPackage(appInfo.packageName) },
+                                    onCheckedChange = null,
                                     modifier = Modifier.testTag("checkbox_${appInfo.packageName}")
                                 )
                             }
@@ -1730,87 +1775,83 @@ private fun AppShortcutWidgetCard(
 
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = Color(0xFF1B1B22),
-        modifier = Modifier.fillMaxWidth()
+        color = Color(0xFF16171D),
+        border = BorderStroke(1.dp, Color(0xFF282B36)),
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable {
+                try {
+                    val intent = context.packageManager.getLaunchIntentForPackage(packageName)
+                    if (intent != null) {
+                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
+                    }
+                } catch (e: Throwable) {
+                    e.printStackTrace()
+                }
+            }
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier.size(54.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     if (iconBitmap != null) {
                         Image(
                             bitmap = iconBitmap,
                             contentDescription = appName,
                             modifier = Modifier
-                                .size(24.dp)
-                                .clip(RoundedCornerShape(6.dp))
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(10.dp))
                         )
                     } else {
                         Icon(
                             imageVector = Icons.Default.Apps,
                             contentDescription = null,
                             tint = Color(0xFF80CBC4),
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(36.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "APP WIDGET SHORTCUT",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF80CBC4),
-                        letterSpacing = 1.sp
-                    )
-                }
 
-                IconButton(onClick = onRemove, modifier = Modifier.size(28.dp)) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Remove",
-                        tint = Color.White.copy(alpha = 0.4f),
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = appName, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 16.sp)
-                    Text(text = packageName, fontSize = 11.sp, color = Color.White.copy(alpha = 0.5f))
-                }
-
-                Button(
-                    onClick = {
-                        try {
-                            val intent = context.packageManager.getLaunchIntentForPackage(packageName)
-                            if (intent != null) {
-                                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                context.startActivity(intent)
-                            }
-                        } catch (e: Throwable) {
-                            e.printStackTrace()
+                    // Shortcut Icon Overlay at the bottom-right of the icon container
+                    Surface(
+                        shape = CircleShape,
+                        color = Color(0xFF111115),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
+                        modifier = Modifier
+                            .size(18.dp)
+                            .align(Alignment.BottomEnd)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(10.dp)
+                            )
                         }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00897B)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Launch App", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = appName,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White.copy(alpha = 0.85f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
