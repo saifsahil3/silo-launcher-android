@@ -5,7 +5,8 @@ param (
 
     [string]$Token = "AOA52M7FI32L2YNQHPZREILKOTRXW",
     [string]$RepoUrl = "https://github.com/saifsahil3/silo-launcher-android",
-    [string]$ContainerName = "silo-github-runner"
+    [string]$ContainerName = "silo-github-runner",
+    [string]$RunnerName = "silo-local-runner"
 )
 
 switch ($Action.ToLower()) {
@@ -18,8 +19,9 @@ switch ($Action.ToLower()) {
         docker run -d --name $ContainerName --restart always `
             -e REPO_URL="$RepoUrl" `
             -e RUNNER_TOKEN="$Token" `
-            -e RUNNER_NAME="local-silo-runner" `
+            -e RUNNER_NAME="$RunnerName" `
             -e RUNNER_WORKDIR="/tmp/github-runner" `
+            -e EPHEMERAL="false" `
             -v /var/run/docker.sock:/var/run/docker.sock `
             myoung34/github-runner:latest
 
