@@ -169,11 +169,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         // Register internal trigger receiver safely
         try {
             val filter = IntentFilter("com.example.morphlauncher.TRIGGER_EVENT")
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                getApplication<Application>().registerReceiver(triggerReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-            } else {
-                getApplication<Application>().registerReceiver(triggerReceiver, filter)
-            }
+            ContextCompat.registerReceiver(
+                getApplication(),
+                triggerReceiver,
+                filter,
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
         } catch (e: Throwable) {
             e.printStackTrace()
         }

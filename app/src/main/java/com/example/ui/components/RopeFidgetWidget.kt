@@ -54,7 +54,7 @@ fun RopeFidgetWidget(modifier: Modifier = Modifier) {
     val updatedLevel by rememberUpdatedState(currentLevel)
     val updatedLockedThreshold by rememberUpdatedState(currentLockedThreshold)
 
-    BoxWithConstraints(
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .height(80.dp)
@@ -421,10 +421,16 @@ fun triggerHaptic(context: Context, isThud: Boolean = false) {
         }
 
         if (vibrator.hasVibrator()) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val effectId = if (isThud) VibrationEffect.Composition.PRIMITIVE_THUD else VibrationEffect.Composition.PRIMITIVE_CLICK
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val effectId = if (isThud && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    VibrationEffect.Composition.PRIMITIVE_THUD
+                } else {
+                    VibrationEffect.Composition.PRIMITIVE_CLICK
+                }
                 val composition = VibrationEffect.startComposition().addPrimitive(effectId).compose()
                 vibrator.vibrate(composition)
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                vibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
             } else {
                 @Suppress("DEPRECATION")
                 vibrator.vibrate(if (isThud) 50L else 10L)

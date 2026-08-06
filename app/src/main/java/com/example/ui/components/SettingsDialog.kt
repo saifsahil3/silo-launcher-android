@@ -39,6 +39,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,7 +63,7 @@ fun SettingsDialog(
     onOpenLabs: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
-    val settings = viewModel.settings.value
+    val settings by viewModel.settings.collectAsState()
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
