@@ -23,8 +23,10 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Power
+import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
@@ -43,18 +45,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.example.core.config.EnvironmentConfig
 import com.example.ui.LauncherViewModel
 import com.example.util.PassThroughManager
 
 @Composable
 fun SettingsDialog(
     viewModel: LauncherViewModel,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onOpenLabs: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val settings = viewModel.settings.value
@@ -359,6 +364,22 @@ fun SettingsDialog(
                         ) {
                             Text(if (isDefault) "Switch Default Launcher (Exit Silo)" else "Set Silo as Default Launcher")
                         }
+                    }
+                }
+
+                if (EnvironmentConfig.current.isLabsAvailable && onOpenLabs != null) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = {
+                            onDismiss()
+                            onOpenLabs()
+                        },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFFB74D)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(imageVector = Icons.Default.Science, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Open Silo Labs (Dev)")
                     }
                 }
 
