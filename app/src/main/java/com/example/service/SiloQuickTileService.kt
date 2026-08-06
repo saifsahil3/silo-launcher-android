@@ -36,7 +36,7 @@ class SiloQuickTileService : TileService() {
                 )
                 startActivityAndCollapse(pendingIntent)
             } else {
-                @Suppress("DEPRECATION")
+                @Suppress("StartActivityAndCollapseDeprecated", "DEPRECATION")
                 startActivityAndCollapse(intent)
             }
         } catch (e: Throwable) {
