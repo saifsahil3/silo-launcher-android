@@ -71,7 +71,9 @@ fun PassThroughFloatingBanner(
             val context = androidx.compose.ui.platform.LocalContext.current
             val logoBitmap = androidx.compose.runtime.remember(context) {
                 try {
-                    androidx.core.content.ContextCompat.getDrawable(context, com.example.R.mipmap.ic_launcher_round)?.toImageBitmapSafe()
+                    androidx.core.content.ContextCompat.getDrawable(context,
+                        R.drawable.ic_launcher_background
+                    )?.toImageBitmapSafe()
                         ?: androidx.core.content.ContextCompat.getDrawable(context, com.example.R.mipmap.ic_launcher)?.toImageBitmapSafe()
                 } catch (e: Throwable) {
                     null

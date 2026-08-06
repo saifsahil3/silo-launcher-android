@@ -62,6 +62,7 @@ import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.screens.AllAppsScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.CreatorModeScreen
+import com.example.ui.labs.LabsScreen
 import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
@@ -119,7 +120,6 @@ class MainActivity : ComponentActivity() {
         intent?.removeExtra("EXIT_PASSTHROUGH")
     }
 }
-
 @Composable
 fun SiloLauncherApp(viewModel: LauncherViewModel) {
     val currentMode by viewModel.currentMode.collectAsStateWithLifecycle()
@@ -139,6 +139,7 @@ fun SiloLauncherApp(viewModel: LauncherViewModel) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
 
     var showSettingsScreen by remember { mutableStateOf(false) }
+    var showLabsScreen by remember { mutableStateOf(false) }
     val context = LocalContext.current
     var showDefaultLauncherPrompt by remember { mutableStateOf(false) }
 
@@ -166,10 +167,13 @@ fun SiloLauncherApp(viewModel: LauncherViewModel) {
         )
     }
 
-    if (showSettingsScreen) {
+    if (showLabsScreen) {
+        LabsScreen(onBack = { showLabsScreen = false })
+    } else if (showSettingsScreen) {
         SettingsScreen(
             viewModel = viewModel,
-            onBack = { showSettingsScreen = false }
+            onBack = { showSettingsScreen = false },
+            onOpenLabs = { showLabsScreen = true }
         )
     } else {
         val context = LocalContext.current

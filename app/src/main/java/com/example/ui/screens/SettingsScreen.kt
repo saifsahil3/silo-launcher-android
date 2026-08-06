@@ -70,6 +70,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.material.icons.filled.Science
+import com.example.core.config.EnvironmentConfig
 import com.example.ui.LauncherViewModel
 import com.example.util.PassThroughManager
 import com.example.db.CreatorStageConfigEntity
@@ -86,6 +88,7 @@ enum class SettingsSubPage {
 fun SettingsScreen(
     viewModel: LauncherViewModel,
     onBack: () -> Unit,
+    onOpenLabs: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -613,6 +616,57 @@ fun SettingsScreen(
                                     color = Color.White,
                                     fontSize = 14.sp
                                 )
+                            }
+                        }
+                    }
+
+                    if (EnvironmentConfig.current.isLabsAvailable && onOpenLabs != null) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Card(
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF181A20)),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFB74D).copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(18.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = Color(0xFF262933),
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Default.Science,
+                                                contentDescription = null,
+                                                tint = Color(0xFFFFB74D),
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(
+                                            text = "Silo Labs (Developer)",
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White,
+                                            fontSize = 15.sp
+                                        )
+                                        Text(
+                                            text = "Internal experimental features & feature flag control",
+                                            fontSize = 12.sp,
+                                            color = Color(0xFF9CA3AF)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(14.dp))
+                                OutlinedButton(
+                                    onClick = onOpenLabs,
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFFB74D)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Open Silo Labs", fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
