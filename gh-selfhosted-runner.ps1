@@ -21,7 +21,9 @@ switch ($Action.ToLower()) {
             -e RUNNER_TOKEN="$Token" `
             -e RUNNER_NAME="$RunnerName" `
             -e RUNNER_WORKDIR="/tmp/github-runner" `
-            -e EPHEMERAL="false" `
+            --sysctl net.ipv4.tcp_keepalive_time=30 `
+            --sysctl net.ipv4.tcp_keepalive_intvl=10 `
+            --sysctl net.ipv4.tcp_keepalive_probes=5 `
             -v /var/run/docker.sock:/var/run/docker.sock `
             myoung34/github-runner:latest
 
