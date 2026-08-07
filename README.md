@@ -14,7 +14,7 @@ This project supports a production-ready development workflow with:
 - **Feature Flags**: Persistent feature flags backed by Android DataStore Preferences.
 - **Silo Labs**: Hidden developer screen (in `dev` build set only) to toggle feature flags, reset preferences, and inspect build parameters.
 - **CI/CD Pipelines**: GitHub Actions workflows for PR check (build, unit tests, lint) and automated release packaging.
-- **Privacy Policy**: Read our Google Play compliant [Privacy Policy](docs/PRIVACY_POLICY.md) (hosted via GitHub Pages).
+- **Privacy Policy**: Read our Google Play compliant [Privacy Policy](docs/privacy.html) (hosted via GitHub Pages).
 
 For complete branch strategies, release rules, and Definition of Done, refer to [DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md).
 

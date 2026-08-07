@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy — Silo Launcher</title>
+    <meta name="description" content="Privacy policy for Silo Android Launcher. 100% on-device processing, zero telemetry, zero ad tracking.">
+    <link rel="icon" type="image/png" href="assets/silo-logo.png">
+    
+    <!-- Custom Fonts: Playfair Display for editorial warmth & Plus Jakarta Sans for clean UI -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg: #0c0e14;
+            --surface: #141722;
+            --surface-hover: #1c2030;
+            --border: rgba(255, 255, 255, 0.08);
+            --border-highlight: rgba(255, 255, 255, 0.18);
+            
+            --text-heading: #f1f5f9;
+            --text-body: #94a3b8;
+            --text-dim: #64748b;
+            
+            --amber-accent: #f59e0b;
+            --emerald-accent: #10b981;
+            
+            --font-serif: 'Playfair Display', Georgia, serif;
+            --font-sans: 'Plus Jakarta Sans', -apple-system, sans-serif;
+            
+            --radius-card: 20px;
+            --radius-pill: 9999px;
+        }
+
+        [data-theme="light"] {
+            --bg: #faf9f6;
+            --surface: #ffffff;
+            --surface-hover: #f1f3f7;
+            --border: rgba(0, 0, 0, 0.08);
+            --border-highlight: rgba(0, 0, 0, 0.2);
+            
+            --text-heading: #0f172a;
+            --text-body: #475569;
+            --text-dim: #94a3b8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg);
+            color: var(--text-heading);
+            line-height: 1.65;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        .container {
+            max-width: 1040px;
+            margin: 0 auto;
+            padding: 0 1.5rem;
+        }
+
+        /* Minimal Header */
+        header {
+            padding: 1.75rem 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+            color: var(--text-heading);
+            font-weight: 700;
+            font-size: 1.15rem;
+        }
+
+        .brand img {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-body);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover, .nav-links a.active {
+            color: var(--text-heading);
+        }
+
+        .theme-btn {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-heading);
+            padding: 0.4rem 0.85rem;
+            border-radius: var(--radius-pill);
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .theme-btn:hover {
+            border-color: var(--border-highlight);
+        }
+
+        /* Hero Section */
+        .hero {
+            padding: 4rem 0 3rem 0;
+            text-align: center;
+        }
+
+        .hero-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            color: var(--emerald-accent);
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            padding: 0.35rem 1rem;
+            border-radius: var(--radius-pill);
+            margin-bottom: 1.5rem;
+        }
+
+        .hero h1 {
+            font-family: var(--font-serif);
+            font-size: 3.2rem;
+            font-weight: 700;
+            line-height: 1.15;
+            letter-spacing: -0.02em;
+            margin-bottom: 1.25rem;
+        }
+
+        .hero h1 em {
+            font-style: italic;
+            font-weight: 400;
+            color: var(--text-body);
+        }
+
+        .hero p {
+            font-size: 1.2rem;
+            color: var(--text-body);
+            max-width: 640px;
+            margin: 0 auto 2.5rem auto;
+        }
+
+        /* Privacy Grid */
+        .privacy-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 4rem;
+        }
+
+        .privacy-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-card);
+            padding: 1.75rem;
+            transition: all 0.25s ease;
+        }
+
+        .privacy-card:hover {
+            border-color: var(--border-highlight);
+            transform: translateY(-2px);
+            background: var(--surface-hover);
+        }
+
+        .privacy-card h3 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .privacy-card p {
+            color: var(--text-body);
+            font-size: 0.925rem;
+            line-height: 1.6;
+        }
+
+        /* Policy Document Box */
+        .document-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-card);
+            padding: 2.5rem;
+            margin-bottom: 5rem;
+        }
+
+        .policy-section {
+            margin-bottom: 2rem;
+            padding-bottom: 1.75rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .policy-section:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        .policy-section h2 {
+            font-family: var(--font-serif);
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+        }
+
+        .policy-section p {
+            color: var(--text-body);
+            font-size: 0.95rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .policy-section ul {
+            margin-left: 1.25rem;
+            color: var(--text-body);
+            font-size: 0.95rem;
+        }
+
+        .policy-section li {
+            margin-bottom: 0.4rem;
+        }
+
+        /* Footer */
+        footer {
+            padding: 3rem 0;
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: var(--text-dim);
+            font-size: 0.875rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 1.5rem;
+            list-style: none;
+        }
+
+        .footer-links a {
+            color: var(--text-body);
+            text-decoration: none;
+        }
+
+        .footer-links a:hover {
+            color: var(--text-heading);
+        }
+
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 2.3rem; }
+            .document-card { padding: 1.75rem; }
+            footer { flex-direction: column; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Minimal Header -->
+        <header>
+            <a href="index.html" class="brand">
+                <img src="assets/silo-logo.png" alt="Silo Logo">
+                <span>Silo</span>
+            </a>
+            
+            <ul class="nav-links">
+                <li><a href="index.html#modes">Silos</a></li>
+                <li><a href="index.html#philosophy">Philosophy</a></li>
+                <li><a href="privacy.html" class="active">Privacy</a></li>
+                <li><a href="https://github.com/saifsahil3/silo-launcher-android" target="_blank">GitHub</a></li>
+            </ul>
+
+            <button class="theme-btn" onclick="toggleTheme()" id="themeBtn">🌙 Dark</button>
+        </header>
+
+        <!-- Hero Section -->
+        <section class="hero">
+            <span class="hero-tag">✓ Google Play Compliant</span>
+            <h1>Built for focus.<br><em>Guaranteed for privacy.</em></h1>
+            <p>Silo operates entirely on your phone. No background trackers, no ad SDKs, and no cloud uploads of your personal app habits.</p>
+        </section>
+
+        <!-- Key Commitments Grid -->
+        <div class="privacy-grid">
+            <div class="privacy-card">
+                <h3>📱 Installed Apps</h3>
+                <p>Scans your installed apps locally so you can group them into Silos. Your app list is stored only in device memory and never transmitted.</p>
+            </div>
+
+            <div class="privacy-card">
+                <h3>📍 Real-time Context Triggers</h3>
+                <p>Optional Bluetooth or location rules switch modes automatically (e.g., Work vs Drive mode). Location data is processed instantly and never logged.</p>
+            </div>
+
+            <div class="privacy-card">
+                <h3>🌙 Focus & DND Integration</h3>
+                <p>Toggles Android Do Not Disturb mode when entering focus silos. Silo never reads or inspects your notification content.</p>
+            </div>
+
+            <div class="privacy-card">
+                <h3>🧩 Widget Frame</h3>
+                <p>Acts purely as a container for your home screen widgets. Silo does not access or store data rendered inside external widgets.</p>
+            </div>
+
+            <div class="privacy-card">
+                <h3>💾 On-Device Storage</h3>
+                <p>All focus settings, stage rules, and allowed app lists remain safely stored in your device's private app data directory.</p>
+            </div>
+
+            <div class="privacy-card">
+                <h3>🚫 Zero Data Monetization</h3>
+                <p>We do not collect, rent, sell, or share user data. Silo contains zero ad networks and zero third-party analytics code.</p>
+            </div>
+        </div>
+
+        <!-- Official Legal Text Box -->
+        <main class="document-card">
+            <section class="policy-section">
+                <h2>1. Overview</h2>
+                <p>Silo Launcher ("Silo", "we", "our") is designed as a minimal, context-shifting Android launcher. Our guiding principle is simple: <strong>your data belongs exclusively to you</strong>. All mode rules, app drawers, and focus sessions run on-device.</p>
+            </section>
+
+            <section class="policy-section">
+                <h2>2. Permissions & Capability Usage</h2>
+                <p>Silo requests minimal Android permissions necessary to function as a home screen launcher:</p>
+                <ul>
+                    <li><strong>QUERY_ALL_PACKAGES:</strong> Enables displaying and opening installed apps in your selected Silo modes.</li>
+                    <li><strong>ACCESS_FINE_LOCATION & BLUETOOTH_CONNECT:</strong> Enables optional real-time context triggers to switch modes automatically.</li>
+                    <li><strong>ACCESS_NOTIFICATION_POLICY:</strong> Allows toggling Do Not Disturb mode during focus sessions.</li>
+                </ul>
+            </section>
+
+            <section class="policy-section">
+                <h2>3. Data Deletion & Control</h2>
+                <p>You remain in total control of your data at all times. Clearing app data via <em>Android Settings &gt; Apps &gt; Silo &gt; Storage &gt; Clear Data</em> or uninstalling the app permanently removes all stored preferences from your device instantly.</p>
+            </section>
+
+            <section class="policy-section">
+                <h2>4. Children's Privacy</h2>
+                <p>Silo Launcher fully complies with COPPA and GDPR. Because no personal information is collected or transmitted, Silo is completely safe for users of all age groups.</p>
+            </section>
+
+            <section class="policy-section">
+                <h2>5. Contact & Open Source</h2>
+                <p>If you have any questions or wish to inspect how Silo handles privacy, feel free to visit our official repository:</p>
+                <p><a href="https://github.com/saifsahil3/silo-launcher-android" target="_blank" style="color: var(--amber-accent); font-weight: 600;">https://github.com/saifsahil3/silo-launcher-android</a></p>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer>
+            <span>&copy; 2026 Silo Launcher. Simple, contextual focus & privacy.</span>
+            <ul class="footer-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="privacy.html">Privacy Policy</a></li>
+                <li><a href="https://github.com/saifsahil3/silo-launcher-android" target="_blank">GitHub</a></li>
+            </ul>
+        </footer>
+    </div>
+
+    <script>
+        function toggleTheme() {
+            const body = document.documentElement;
+            const isLight = body.getAttribute('data-theme') === 'light';
+            body.setAttribute('data-theme', isLight ? 'dark' : 'light');
+            document.getElementById('themeBtn').textContent = isLight ? '🌙 Dark' : '☀️ Light';
+        }
+    </script>
+</body>
+</html>
