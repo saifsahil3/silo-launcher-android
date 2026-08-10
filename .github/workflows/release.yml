@@ -2,11 +2,14 @@ name: Production Release
 
 on:
   push:
-    branches:
-      - main
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release Version (e.g. 1.2.0 or 2.0.0)'
+        required: true
+        default: '1.0.0'
 
 jobs:
   release:
@@ -32,6 +35,33 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Determine Version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            RAW_VER="${{ inputs.version }}"
+          else
+            RAW_VER="${{ github.ref_name }}"
+          fi
+          # Strip leading 'v' if present (e.g. v1.2.0 -> 1.2.0)
+          CLEAN_VER="${RAW_VER#v}"
+          echo "VERSION_NAME=$CLEAN_VER" >> $GITHUB_ENV
+          echo "TAG_NAME=v$CLEAN_VER" >> $GITHUB_ENV
+
+      - name: Update app/build.gradle.kts version
+        run: |
+          sed -i "s/versionCode = .*/versionCode = ${{ github.run_number }}/" app/build.gradle.kts
+          sed -i 's/versionName = .*/versionName = "'"$VERSION_NAME"'"/' app/build.gradle.kts
+
+      - name: Commit & Push Version Bump
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add app/build.gradle.kts
+          git commit -m "chore(release): bump version to $VERSION_NAME (build ${{ github.run_number }})" || echo "No changes to commit"
+          git push
+
       - name: Decode Android Keystore
         run: |
           echo "${{ secrets.KEYSTORE_B64 }}" | base64 --decode > my-upload-key.jks
@@ -55,9 +85,10 @@ jobs:
           path: app/build/outputs/bundle/prodRelease/*.aab
 
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: ${{ env.TAG_NAME }}
+          name: Release ${{ env.TAG_NAME }}
           files: |
             app/build/outputs/apk/prod/release/*.apk
             app/build/outputs/bundle/prodRelease/*.aab
@@ -65,3 +96,4 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
