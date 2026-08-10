@@ -72,7 +72,7 @@ fun PassThroughFloatingBanner(
             val logoBitmap = androidx.compose.runtime.remember(context) {
                 try {
                     androidx.core.content.ContextCompat.getDrawable(context,
-                        R.drawable.ic_launcher_background
+                        R.drawable.silo_logo
                     )?.toImageBitmapSafe()
                         ?: androidx.core.content.ContextCompat.getDrawable(context, com.example.R.mipmap.ic_launcher)?.toImageBitmapSafe()
                 } catch (e: Throwable) {
@@ -95,6 +95,7 @@ fun PassThroughFloatingBanner(
                         Image(
                             bitmap = logoBitmap,
                             contentDescription = "Silo Launcher App Logo",
+                            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                             modifier = Modifier.size(28.dp)
                         )
                     } else {

@@ -13,8 +13,9 @@ switch ($Action.ToLower()) {
     "start" {
         Write-Host "Starting GitHub Self-Hosted Runner container ($ContainerName)..." -ForegroundColor Green
         
-        # Remove old container if exists
-        docker rm -f $ContainerName 2>$null | Out-Null
+        # Gracefully stop old container if running to cleanly close GitHub session
+        docker stop -t 10 $ContainerName 2>$null | Out-Null
+        docker rm $ContainerName 2>$null | Out-Null
 
         docker run -d --name $ContainerName --restart always `
             -e REPO_URL="$RepoUrl" `

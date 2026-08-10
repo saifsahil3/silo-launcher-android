@@ -171,6 +171,7 @@ private fun CreatorEntryScreen(
                 Image(
                     bitmap = logoBitmap,
                     contentDescription = "Silo Launcher Logo",
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                     modifier = Modifier.size(56.dp)
                 )
             } else {

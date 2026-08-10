@@ -134,7 +134,6 @@ import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.window.DialogProperties
-import com.example.util.FocusAudioGenerator
 import com.example.util.toImageBitmapSafe
 import java.util.Locale
 
@@ -1620,135 +1619,44 @@ private fun BuiltInAudioWidgetCard(
     title: String,
     onRemove: () -> Unit
 ) {
-    val coroutineScope = rememberCoroutineScope()
-    var isPlaying by remember { mutableStateOf(false) }
-    var selectedTrack by remember { mutableIntStateOf(0) }
-    val tracks = remember { listOf("Rain & White Noise", "Deep Focus Waves", "Gentle Wind") }
-
-    val audioGenerator = remember { FocusAudioGenerator() }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            audioGenerator.stop()
-        }
-    }
-
     Surface(
         shape = RoundedCornerShape(20.dp),
         color = Color(0xFF1B1B22),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = null,
-                        tint = Color(0xFF81D4FA),
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "AMBIENT FOCUS SOUND",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF81D4FA),
-                        letterSpacing = 1.sp
-                    )
-                }
-
-                IconButton(
-                    onClick = {
-                        audioGenerator.stop()
-                        onRemove()
-                    },
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Remove",
-                        tint = Color.White.copy(alpha = 0.4f),
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.MusicNote,
+                    contentDescription = null,
+                    tint = Color(0xFF81D4FA),
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = title,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Sound track selection chips
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            IconButton(
+                onClick = onRemove,
+                modifier = Modifier.size(28.dp)
             ) {
-                tracks.forEachIndexed { index, trackName ->
-                    val isSelected = selectedTrack == index
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = if (isSelected) Color(0xFF81D4FA).copy(alpha = 0.25f) else Color(0xFF252530),
-                        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF81D4FA)) else null,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .clickable {
-                                selectedTrack = index
-                                if (isPlaying) {
-                                    audioGenerator.stop()
-                                    audioGenerator.startAmbientSound(coroutineScope, selectedTrack)
-                                }
-                            }
-                    ) {
-                        Text(
-                            text = trackName,
-                            fontSize = 11.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isSelected) Color(0xFF81D4FA) else Color.White.copy(alpha = 0.7f),
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = tracks[selectedTrack], fontWeight = FontWeight.Bold, color = Color.White, fontSize = 15.sp)
-                    Text(
-                        text = if (isPlaying) "Playing real ambient audio generator" else "Paused • Tap play to start ambient sound",
-                        fontSize = 12.sp,
-                        color = if (isPlaying) Color(0xFF81D4FA) else Color.White.copy(alpha = 0.6f)
-                    )
-                }
-
-                Button(
-                    onClick = {
-                        if (isPlaying) {
-                            audioGenerator.stop()
-                            isPlaying = false
-                        } else {
-                            audioGenerator.startAmbientSound(coroutineScope, selectedTrack)
-                            isPlaying = true
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isPlaying) Color(0xFFE57373) else Color(0xFF81D4FA)
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(
-                        text = if (isPlaying) "Pause" else "Play",
-                        color = Color.Black,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Remove",
+                    tint = Color.White.copy(alpha = 0.4f),
+                    modifier = Modifier.size(16.dp)
+                )
             }
         }
     }
