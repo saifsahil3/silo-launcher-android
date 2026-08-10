@@ -6,6 +6,7 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import kotlin.math.min
 
 fun Drawable.toImageBitmapSafe(): ImageBitmap? {
     return try {
@@ -14,11 +15,15 @@ fun Drawable.toImageBitmapSafe(): ImageBitmap? {
         } else {
             val rawW = if (intrinsicWidth > 0) intrinsicWidth else 96
             val rawH = if (intrinsicHeight > 0) intrinsicHeight else 96
-            val width = rawW.coerceIn(1, 256)
-            val height = rawH.coerceIn(1, 256)
-            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val canvasSize = maxOf(rawW, rawH).coerceIn(1, 256)
+            val bitmap = Bitmap.createBitmap(canvasSize, canvasSize, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
-            setBounds(0, 0, canvas.width, canvas.height)
+            val scale = min(canvasSize.toFloat() / rawW, canvasSize.toFloat() / rawH)
+            val targetW = (rawW * scale).toInt()
+            val targetH = (rawH * scale).toInt()
+            val left = (canvasSize - targetW) / 2
+            val top = (canvasSize - targetH) / 2
+            setBounds(left, top, left + targetW, top + targetH)
             draw(canvas)
             bitmap.asImageBitmap()
         }
@@ -26,4 +31,3 @@ fun Drawable.toImageBitmapSafe(): ImageBitmap? {
         null
     }
 }
-

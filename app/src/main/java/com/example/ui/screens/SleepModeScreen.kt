@@ -1,6 +1,9 @@
 package com.example.ui.screens
 
+import android.content.Intent
+import android.provider.AlarmClock
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,17 +24,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.DoNotDisturbOn
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.NightsStay
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.ShieldMoon
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -42,11 +44,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.LauncherViewModel
@@ -64,194 +68,284 @@ fun SleepModeScreen(
 ) {
     val context = LocalContext.current
     var currentTimeString by remember { mutableStateOf("") }
+    var currentDateString by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         val timeFormat = SimpleDateFormat("hh:mm a", Locale.getDefault())
+        val dateFormat = SimpleDateFormat("EEEE, MMMM d", Locale.getDefault())
         while (true) {
-            currentTimeString = timeFormat.format(Date())
+            val now = Date()
+            currentTimeString = timeFormat.format(now)
+            currentDateString = dateFormat.format(now)
             delay(1000)
         }
     }
 
-    val soundTracks = listOf("Rainfall", "Ocean Waves", "Night Forest", "Deep White Noise")
+    val windDownOptions = listOf(15, 30, 45, 60)
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF090A0D)) // Ultra-dim dark OLED background
-            .padding(horizontal = 20.dp, vertical = 12.dp)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Bedtime Header
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.Bedtime,
-                    contentDescription = null,
-                    tint = Color(0xFF7986CB),
-                    modifier = Modifier.size(20.dp)
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFF090A0E),
+                        Color(0xFF0E111B),
+                        Color(0xFF090A0E)
+                    )
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "WIND-DOWN & SLEEP",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF7986CB),
-                    letterSpacing = 2.sp
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Text(
-                text = currentTimeString.ifEmpty { "10:30 PM" },
-                fontSize = 54.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
-                color = Color.White.copy(alpha = 0.9f)
             )
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF161822))
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Alarm,
-                    contentDescription = "Alarm",
-                    tint = Color(0xFFFFB74D),
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Alarm set for ${sleepState.bedtimeAlarmTime}",
-                    fontSize = 13.sp,
-                    color = Color.White.copy(alpha = 0.7f)
-                )
-            }
-        }
-
-        // Quick DND Toggle Card
+            .padding(horizontal = 20.dp, vertical = 16.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
+    ) {
+        // Bedtime Banner & Clock Display
         Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF141620)),
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF131624)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF23283E)),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.DoNotDisturbOn,
-                        contentDescription = "DND",
-                        tint = if (sleepState.isDndActive) Color(0xFFE53935) else Color.White.copy(alpha = 0.5f)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = "Do Not Disturb",
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Text(
-                            text = if (sleepState.isDndActive) "Notifications Silenced" else "Allow calls & alarms",
-                            fontSize = 12.sp,
-                            color = Color.White.copy(alpha = 0.5f)
-                        )
-                    }
-                }
-                Switch(
-                    checked = sleepState.isDndActive,
-                    onCheckedChange = { viewModel.toggleDnd() },
-                    modifier = Modifier.testTag("sleep_dnd_switch")
-                )
-            }
-        }
-
-        // Ambient Sleep Sound Generator Card
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF141620)),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(18.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFF1E243A),
+                    modifier = Modifier.size(54.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            imageVector = Icons.Default.GraphicEq,
-                            contentDescription = "Ambient Sound",
-                            tint = Color(0xFF7986CB)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = "Ambient Sleep Audio",
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            fontSize = 16.sp
-                        )
-                    }
-
-                    IconButton(
-                        onClick = { viewModel.toggleAmbientSound() },
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(if (sleepState.isAmbientSoundPlaying) Color(0xFF7986CB) else Color.White.copy(alpha = 0.1f))
-                            .size(40.dp)
-                            .testTag("sleep_ambient_play_button")
-                    ) {
-                        Icon(
-                            imageVector = if (sleepState.isAmbientSoundPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = "Play/Pause Sound",
-                            tint = if (sleepState.isAmbientSoundPlaying) Color.Black else Color.White
+                            imageVector = Icons.Default.NightsStay,
+                            contentDescription = "Sleep Mode",
+                            tint = Color(0xFF9FA8DA),
+                            modifier = Modifier.size(28.dp)
                         )
                     }
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Sound selection chips
+                Text(
+                    text = "WIND-DOWN & SLEEP",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF9FA8DA),
+                    letterSpacing = 2.sp
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = currentTimeString.ifEmpty { "10:30 PM" },
+                    fontSize = 52.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    color = Color.White
+                )
+
+                Text(
+                    text = currentDateString.ifEmpty { "Good Night" },
+                    fontSize = 13.sp,
+                    color = Color.White.copy(alpha = 0.6f)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Bedtime Alarm Button Shortcut
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0xFF1B2032),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2C3450)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable {
+                            try {
+                                val alarmIntent = Intent(AlarmClock.ACTION_SHOW_ALARMS)
+                                alarmIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                context.startActivity(alarmIntent)
+                            } catch (e: Exception) {
+                                try {
+                                    val fallbackIntent = Intent(AlarmClock.ACTION_SET_ALARM)
+                                    fallbackIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    context.startActivity(fallbackIntent)
+                                } catch (err: Exception) {
+                                    err.printStackTrace()
+                                }
+                            }
+                        }
+                        .testTag("sleep_alarm_button")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Alarm,
+                                contentDescription = "Alarm",
+                                tint = Color(0xFFFFB74D),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "Bedtime Alarm",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "Alarm set for ${sleepState.bedtimeAlarmTime}",
+                                    fontSize = 11.sp,
+                                    color = Color.White.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = "Manage >",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFFFFB74D)
+                        )
+                    }
+                }
+            }
+        }
+
+        // Wind-Down Timer Card
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF131624)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF23283E)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Schedule,
+                        contentDescription = "Wind Down",
+                        tint = Color(0xFF7986CB),
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "Wind-Down Timer",
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            fontSize = 16.sp
+                        )
+                        Text(
+                            text = "Set bedtime duration before sleep mode dims",
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.6f)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    soundTracks.take(2).forEach { track ->
-                        val isSelected = sleepState.selectedSoundTrack == track
+                    windDownOptions.forEach { minutes ->
+                        val isSelected = sleepState.windDownTimerMinutes == minutes
                         Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (isSelected) Color(0xFF283593) else Color(0xFF1C1E2B),
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (isSelected) Color(0xFF3F51B5) else Color(0xFF1B2032),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isSelected) Color(0xFF7986CB) else Color(0xFF282E46)
+                            ),
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable { viewModel.setAmbientTrack(track) }
-                                .padding(vertical = 10.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .clickable { viewModel.updateWindDownTimer(minutes) }
+                                .padding(vertical = 12.dp)
                         ) {
                             Text(
-                                text = track,
-                                fontSize = 12.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                text = "$minutes m",
+                                fontSize = 13.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 color = if (isSelected) Color.White else Color.White.copy(alpha = 0.7f),
                                 modifier = Modifier.fillMaxWidth(),
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
                 }
+            }
+        }
+
+        // Quick DND Toggle Card
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF131624)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF23283E)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = if (sleepState.isDndActive) Color(0xFFEF4444).copy(alpha = 0.2f) else Color(0xFF1E243A),
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.DoNotDisturbOn,
+                                contentDescription = "DND",
+                                tint = if (sleepState.isDndActive) Color(0xFFEF4444) else Color.White.copy(alpha = 0.5f),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column {
+                        Text(
+                            text = "Do Not Disturb",
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            fontSize = 15.sp
+                        )
+                        Text(
+                            text = if (sleepState.isDndActive) "Notifications silenced for sleep" else "Allow calls & priority alarms",
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.6f)
+                        )
+                    }
+                }
+
+                Switch(
+                    checked = sleepState.isDndActive,
+                    onCheckedChange = { viewModel.toggleDnd() },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = Color(0xFFEF4444),
+                        uncheckedThumbColor = Color(0xFF94A3B8),
+                        uncheckedTrackColor = Color(0xFF1E243A)
+                    ),
+                    modifier = Modifier.testTag("sleep_dnd_switch")
+                )
             }
         }
     }

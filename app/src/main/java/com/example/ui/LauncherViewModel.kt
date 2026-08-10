@@ -39,8 +39,6 @@ data class DriveStats(
 
 data class SleepState(
     val isDndActive: Boolean = false,
-    val isAmbientSoundPlaying: Boolean = false,
-    val selectedSoundTrack: String = "Rainfall",
     val windDownTimerMinutes: Int = 15,
     val bedtimeAlarmTime: String = "07:00 AM"
 )
@@ -309,14 +307,40 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun toggleAmbientSound() {
-        _sleepState.value = _sleepState.value.copy(
-            isAmbientSoundPlaying = !_sleepState.value.isAmbientSoundPlaying
-        )
+    fun updateWindDownTimer(minutes: Int) {
+        _sleepState.value = _sleepState.value.copy(windDownTimerMinutes = minutes)
     }
 
-    fun setAmbientTrack(track: String) {
-        _sleepState.value = _sleepState.value.copy(selectedSoundTrack = track)
+    fun sendMediaKeyEvent(context: Context, keyCode: Int) {
+        try {
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+            val downEvent = android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, keyCode)
+            val upEvent = android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, keyCode)
+            audioManager?.dispatchMediaKeyEvent(downEvent)
+            audioManager?.dispatchMediaKeyEvent(upEvent)
+        } catch (e: Exception) {
+            try {
+                val downIntent = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
+                    putExtra(Intent.EXTRA_KEY_EVENT, android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, keyCode))
+                }
+                val upIntent = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
+                    putExtra(Intent.EXTRA_KEY_EVENT, android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, keyCode))
+                }
+                context.sendOrderedBroadcast(downIntent, null)
+                context.sendOrderedBroadcast(upIntent, null)
+            } catch (err: Exception) {
+                err.printStackTrace()
+            }
+        }
+    }
+
+    fun isMediaActive(context: Context): Boolean {
+        return try {
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+            audioManager?.isMusicActive == true
+        } catch (e: Exception) {
+            false
+        }
     }
 
     fun toggleDnd() {
@@ -403,45 +427,97 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun triggerSystemHomePicker(context: Context) {
         val activity = context.findActivity()
         val targetContext = activity ?: context
+
+        // 1. Direct System Default Home App Settings (Opens native Home App selector screen across all Android versions & OEMs)
         try {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            val homeSettingsIntent = Intent(android.provider.Settings.ACTION_HOME_SETTINGS)
+            if (activity == null) {
+                homeSettingsIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            targetContext.startActivity(homeSettingsIntent)
+            return
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // 2. Direct System Default Apps Settings
+        try {
+            val defaultAppsIntent = Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+            if (activity == null) {
+                defaultAppsIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            targetContext.startActivity(defaultAppsIntent)
+            return
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // 3. RoleManager ROLE_HOME intent on Android 10+ (API 29+)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            try {
                 val roleManager = targetContext.getSystemService(android.app.role.RoleManager::class.java)
                 if (roleManager != null && roleManager.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME)) {
-                    if (!roleManager.isRoleHeld(android.app.role.RoleManager.ROLE_HOME)) {
-                        val roleIntent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME)
-                        if (activity == null) {
-                            roleIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        targetContext.startActivity(roleIntent)
-                        return
+                    val roleIntent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME)
+                    if (activity == null) {
+                        roleIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
+                    targetContext.startActivity(roleIntent)
+                    return
                 }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
-            val intent = Intent(android.provider.Settings.ACTION_HOME_SETTINGS)
-            if (activity == null) {
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            targetContext.startActivity(intent)
-        } catch (e: Exception) {
+        }
+
+        // 4. Fallback string intent actions for OEM specific settings
+        val oemActions = listOf(
+            "android.settings.HOME_SETTINGS",
+            "android.settings.DEFAULT_HOME_SETTINGS",
+            "android.settings.MANAGE_DEFAULT_APPS_SETTINGS"
+        )
+        for (action in oemActions) {
             try {
-                val fallbackIntent = Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+                val intent = Intent(action)
                 if (activity == null) {
-                    fallbackIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
-                targetContext.startActivity(fallbackIntent)
-            } catch (err: Exception) {
-                try {
-                    val mainHomeIntent = Intent(Intent.ACTION_MAIN).apply {
-                        addCategory(Intent.CATEGORY_HOME)
-                        if (activity == null) {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                    }
-                    targetContext.startActivity(Intent.createChooser(mainHomeIntent, "Select Default Home Launcher"))
-                } catch (ex: Exception) {
-                    ex.printStackTrace()
+                targetContext.startActivity(intent)
+                return
+            } catch (e: Exception) {
+                // keep trying
+            }
+        }
+
+        // 5. Force system Home intent chooser by resetting preferred activities
+        try {
+            @Suppress("DEPRECATION")
+            context.packageManager.clearPackagePreferredActivities(context.packageName)
+
+            val mainHomeIntent = Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_HOME)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            val chooserIntent = Intent.createChooser(mainHomeIntent, "Select Default Launcher").apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            targetContext.startActivity(chooserIntent)
+            return
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // 6. Final fallback: App Details Settings with Toast instruction
+        try {
+            val appDetailsIntent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = android.net.Uri.parse("package:${context.packageName}")
+                if (activity == null) {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 }
             }
+            targetContext.startActivity(appDetailsIntent)
+            android.widget.Toast.makeText(context, "Please select 'Home App' or 'Defaults' to set Silo as default launcher", android.widget.Toast.LENGTH_LONG).show()
+        } catch (ex: Exception) {
+            ex.printStackTrace()
         }
     }
 
