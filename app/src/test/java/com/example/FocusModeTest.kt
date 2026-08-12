@@ -5,7 +5,7 @@ import android.appwidget.AppWidgetManager
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.example.model.LauncherMode
-import com.example.ui.screens.FocusWidgetData
+import com.example.model.FocusWidgetData
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull

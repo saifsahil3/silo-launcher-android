@@ -19,6 +19,10 @@ import com.example.db.LauncherDatabase
 import com.example.db.ModeSettingEntity
 import com.example.db.CreatorStageConfigEntity
 import com.example.model.LauncherMode
+import com.example.model.FocusWidgetData
+import com.example.model.focusWidgetsFromJson
+import com.example.model.focusWidgetsToJson
+import com.example.model.getDefaultFocusWidgets
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -78,6 +82,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     // Focus Mode
     private val _focusAllowedPackages = MutableStateFlow<List<String>>(emptyList())
     val focusAllowedPackages: StateFlow<List<String>> = _focusAllowedPackages.asStateFlow()
+
+    private val _focusWidgets = MutableStateFlow<List<FocusWidgetData>>(getDefaultFocusWidgets())
+    val focusWidgets: StateFlow<List<FocusWidgetData>> = _focusWidgets.asStateFlow()
 
     private val _focusGoal = MutableStateFlow("Deep Work & Zero Distractions")
     val focusGoal: StateFlow<String> = _focusGoal.asStateFlow()
@@ -213,6 +220,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                         .map { it.trim() }
                         .filter { it.isNotEmpty() }
 
+                    _focusWidgets.value = focusWidgetsFromJson(current.focusWidgetsJson)
+
                     _driveFavoritePackages.value = current.driveFavoritePackages.split(",")
                         .map { it.trim() }
                         .filter { it.isNotEmpty() }
@@ -281,6 +290,43 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun reorderFocusAllowedPackages(newOrder: List<String>) {
         _focusAllowedPackages.value = newOrder
         saveFocusPackagesToDb(newOrder)
+    }
+
+    fun updateFocusWidgets(newList: List<FocusWidgetData>) {
+        _focusWidgets.value = newList
+        saveFocusWidgetsToDb(newList)
+    }
+
+    fun addFocusWidget(widget: FocusWidgetData) {
+        val updated = _focusWidgets.value.toMutableList().apply { add(widget) }
+        _focusWidgets.value = updated
+        saveFocusWidgetsToDb(updated)
+    }
+
+    fun removeFocusWidgetAt(index: Int) {
+        val current = _focusWidgets.value.toMutableList()
+        if (index in current.indices) {
+            current.removeAt(index)
+            _focusWidgets.value = current
+            saveFocusWidgetsToDb(current)
+        }
+    }
+
+    fun updateFocusWidgetAt(index: Int, updatedWidget: FocusWidgetData) {
+        val current = _focusWidgets.value.toMutableList()
+        if (index in current.indices) {
+            current[index] = updatedWidget
+            _focusWidgets.value = current
+            saveFocusWidgetsToDb(current)
+        }
+    }
+
+    private fun saveFocusWidgetsToDb(widgets: List<FocusWidgetData>) {
+        viewModelScope.launch {
+            val json = focusWidgetsToJson(widgets)
+            val updated = _settings.value.copy(focusWidgetsJson = json)
+            dao.saveSettings(updated)
+        }
     }
 
     private fun saveFocusPackagesToDb(packages: List<String>) {

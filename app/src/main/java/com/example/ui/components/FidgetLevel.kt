@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.ui.graphics.Color
+import com.example.ui.components.engine.LevelGenerator
 
 sealed class FidgetLevel(
     val levelNumber: Int,
@@ -11,34 +12,34 @@ sealed class FidgetLevel(
 ) {
     object Level1 : FidgetLevel(
         levelNumber = 1,
-        totalLengthPx = 5000f,
-        lineColor = Color(0xFFC2A649), // Hemp Rope
-        strokeWidthDp = 3.5f,
-        endItemName = "Vintage Ship Anchor"
+        totalLengthPx = 2000f,
+        lineColor = Color(0xFFD4AF37),
+        strokeWidthDp = 1.2f,
+        endItemName = "Button"
     )
 
     object Level2 : FidgetLevel(
         levelNumber = 2,
-        totalLengthPx = 5000f,
-        lineColor = Color(0xFF444444), // Lamp Cord
-        strokeWidthDp = 2.5f,
-        endItemName = "Hanging Light Bulb"
+        totalLengthPx = 1500f,
+        lineColor = Color(0xFFFFF8DC),
+        strokeWidthDp = 1.2f,
+        endItemName = "Feather"
     )
 
     object Level3 : FidgetLevel(
         levelNumber = 3,
-        totalLengthPx = 5000f,
-        lineColor = Color(0xFFE0E0E0), // White Kite String
-        strokeWidthDp = 1.2f,
-        endItemName = "Origami Bird"
+        totalLengthPx = 2500f,
+        lineColor = Color(0xFFE2E8F0),
+        strokeWidthDp = 2.8f,
+        endItemName = "Sock"
     )
 
     object Level4 : FidgetLevel(
         levelNumber = 4,
-        totalLengthPx = 5000f,
-        lineColor = Color(0xFF3A5A40), // Vintage Phone Cable
-        strokeWidthDp = 2.5f,
-        endItemName = "Phone Receiver"
+        totalLengthPx = 4000f,
+        lineColor = Color(0xFFCBD5E1),
+        strokeWidthDp = 2.8f,
+        endItemName = "T-Shirt"
     )
 
     companion object {
@@ -49,6 +50,10 @@ sealed class FidgetLevel(
                 is Level3 -> Level4
                 is Level4 -> Level1
             }
+        }
+
+        fun getEngineLevel(levelId: Int): com.example.ui.components.engine.FidgetLevel {
+            return LevelGenerator.getLevel(levelId)
         }
     }
 }

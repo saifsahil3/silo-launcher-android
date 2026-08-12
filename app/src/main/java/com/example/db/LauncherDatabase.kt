@@ -22,7 +22,8 @@ data class ModeSettingEntity(
     val autoTriggerBluetoothDrive: Boolean = true,
     val autoTriggerChargerSleep: Boolean = false,
     val bedtimeStartHour: Int = 22,
-    val bedtimeEndHour: Int = 7
+    val bedtimeEndHour: Int = 7,
+    val focusWidgetsJson: String = ""
 )
 
 @Entity(tableName = "pinned_apps")
@@ -81,7 +82,7 @@ interface ModeSettingDao {
         PinnedAppEntity::class,
         CreatorStageConfigEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class LauncherDatabase : RoomDatabase() {

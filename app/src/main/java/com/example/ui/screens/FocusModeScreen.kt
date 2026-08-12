@@ -13,6 +13,9 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -63,6 +66,8 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material3.HorizontalDivider
+import com.example.model.FocusWidgetData
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import com.example.util.DndManager
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -137,15 +142,6 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.util.toImageBitmapSafe
 import java.util.Locale
 
-sealed class FocusWidgetData {
-    data class SystemWidget(val widgetId: Int, val label: String, val packageName: String = "", var heightDp: Int = 180, var widthFraction: Float = 1.0f) : FocusWidgetData()
-    data class BuiltInNotes(var content: String, var heightDp: Int = 180, var widthFraction: Float = 1.0f) : FocusWidgetData()
-    data class BuiltInMantra(var quoteIndex: Int, var heightDp: Int = 140, var widthFraction: Float = 1.0f) : FocusWidgetData()
-    data class BuiltInTimer(var durationMinutes: Int = 25, var heightDp: Int = 160, var widthFraction: Float = 1.0f) : FocusWidgetData()
-    data class BuiltInAudio(val title: String = "Rain & Lo-Fi Focus Sound", var heightDp: Int = 180, var widthFraction: Float = 1.0f) : FocusWidgetData()
-    data class AppShortcut(val packageName: String, val appName: String, var heightDp: Int = 120, var widthFraction: Float = 1.0f) : FocusWidgetData()
-}
-
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FocusModeScreen(
@@ -176,13 +172,15 @@ fun FocusModeScreen(
         }
     }
 
-    // List of added focus widgets
-    val activeWidgets = remember {
-        mutableStateListOf<FocusWidgetData>(
-            FocusWidgetData.BuiltInTimer(25),
-            FocusWidgetData.BuiltInNotes("Task 1: Finish Deep Work session\nTask 2: Review project pull requests"),
-            FocusWidgetData.BuiltInMantra(0)
-        )
+    // List of added focus widgets synced with persistent storage in ViewModel
+    val focusWidgetsFromVm by viewModel.focusWidgets.collectAsState()
+    val activeWidgets = remember { mutableStateListOf<FocusWidgetData>() }
+
+    LaunchedEffect(focusWidgetsFromVm) {
+        if (activeWidgets != focusWidgetsFromVm) {
+            activeWidgets.clear()
+            activeWidgets.addAll(focusWidgetsFromVm)
+        }
     }
 
     Box(
@@ -201,6 +199,7 @@ fun FocusModeScreen(
                     allowedPackages = allowedPackages
                 )
                 1 -> FocusWidgetsPage(
+                    viewModel = viewModel,
                     allApps = allApps,
                     activeWidgets = activeWidgets,
                     appWidgetHost = appWidgetHost,
@@ -836,46 +835,56 @@ private fun StockWidgetEditWrapper(
     onRemove: () -> Unit,
     onLongPress: () -> Unit,
     onDismissEdit: () -> Unit,
+    onMoveUp: (() -> Unit)? = null,
+    onMoveDown: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
     var curWidth by remember(widthFraction) { mutableFloatStateOf(widthFraction) }
     var curHeight by remember(heightDp) { mutableIntStateOf(heightDp) }
+    var offsetY by remember { mutableFloatStateOf(0f) }
+    var isDraggingItem by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier
             .fillMaxWidth(curWidth)
             .padding(vertical = 4.dp)
-            .pointerInput(isEditing) {
-                if (!isEditing) {
-                    coroutineScope {
-                        var longPressJob: kotlinx.coroutines.Job? = null
-                        awaitEachGesture {
-                            val down = awaitFirstDown(pass = PointerEventPass.Initial)
-                            val startPosition = down.position
-                            val slop = viewConfiguration.touchSlop
-                            
-                            longPressJob = launch {
-                                delay(viewConfiguration.longPressTimeoutMillis)
-                                onLongPress()
-                            }
-                            
-                            while (true) {
-                                val event = awaitPointerEvent(pass = PointerEventPass.Initial)
-                                val pointerChange = event.changes.firstOrNull { it.id == down.id }
-                                if (pointerChange == null || !pointerChange.pressed) {
-                                    longPressJob?.cancel()
-                                    break
-                                }
-                                val dx = pointerChange.position.x - startPosition.x
-                                val dy = pointerChange.position.y - startPosition.y
-                                if (dx * dx + dy * dy > slop * slop) {
-                                    longPressJob?.cancel()
-                                }
-                            }
-                        }
-                    }
+            .zIndex(if (isDraggingItem) 10f else 0f)
+            .graphicsLayer {
+                translationY = offsetY
+                if (isDraggingItem) {
+                    scaleX = 1.02f
+                    scaleY = 1.02f
                 }
+            }
+            .pointerInput(onMoveUp, onMoveDown) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = {
+                        isDraggingItem = true
+                        onLongPress()
+                    },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        offsetY += dragAmount.y
+                        val threshold = (curHeight + 16).toFloat()
+                        if (offsetY > threshold / 2f && onMoveDown != null) {
+                            onMoveDown()
+                            offsetY -= threshold
+                        } else if (offsetY < -threshold / 2f && onMoveUp != null) {
+                            onMoveUp()
+                            offsetY += threshold
+                        }
+                    },
+                    onDragEnd = {
+                        isDraggingItem = false
+                        offsetY = 0f
+                        onDismissEdit()
+                    },
+                    onDragCancel = {
+                        isDraggingItem = false
+                        offsetY = 0f
+                    }
+                )
             }
     ) {
         Box(
@@ -1002,8 +1011,9 @@ private fun StockWidgetEditWrapper(
 
 @Composable
 private fun FocusWidgetsPage(
+    viewModel: LauncherViewModel,
     allApps: List<AppInfo>,
-    activeWidgets: MutableList<FocusWidgetData>,
+    activeWidgets: SnapshotStateList<FocusWidgetData>,
     appWidgetHost: AppWidgetHost,
     appWidgetManager: AppWidgetManager
 ) {
@@ -1014,6 +1024,10 @@ private fun FocusWidgetsPage(
     var pendingWidgetId by remember { mutableIntStateOf(-1) }
     var pendingWidgetLabel by remember { mutableStateOf("") }
     var pendingWidgetPackage by remember { mutableStateOf("") }
+
+    fun saveWidgets() {
+        viewModel.updateFocusWidgets(activeWidgets.toList())
+    }
 
     val configureWidgetLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -1032,6 +1046,7 @@ private fun FocusWidgetsPage(
                         packageName = pendingWidgetPackage
                     )
                 )
+                saveWidgets()
             } else {
                 try {
                     appWidgetHost.deleteAppWidgetId(pendingWidgetId)
@@ -1076,6 +1091,7 @@ private fun FocusWidgetsPage(
                                 packageName = pendingWidgetPackage
                             )
                         )
+                        saveWidgets()
                         pendingWidgetId = -1
                     }
                 } else {
@@ -1086,6 +1102,7 @@ private fun FocusWidgetsPage(
                             packageName = pendingWidgetPackage
                         )
                     )
+                    saveWidgets()
                     pendingWidgetId = -1
                 }
             } else {
@@ -1114,6 +1131,7 @@ private fun FocusWidgetsPage(
                     detectTapGestures(
                         onTap = {
                             editingWidgetIndex = -1
+                            saveWidgets()
                         }
                     )
                 }
@@ -1215,28 +1233,56 @@ private fun FocusWidgetsPage(
                         onRemove = {
                             editingWidgetIndex = -1
                             activeWidgets.removeAt(index)
+                            saveWidgets()
                         },
                         onLongPress = { editingWidgetIndex = index },
-                        onDismissEdit = { editingWidgetIndex = -1 }
+                        onDismissEdit = {
+                            editingWidgetIndex = -1
+                            saveWidgets()
+                        },
+                        onMoveUp = if (index > 0) {
+                            {
+                                val item = activeWidgets.removeAt(index)
+                                activeWidgets.add(index - 1, item)
+                                editingWidgetIndex = index - 1
+                                saveWidgets()
+                            }
+                        } else null,
+                        onMoveDown = if (index < activeWidgets.lastIndex) {
+                            {
+                                val item = activeWidgets.removeAt(index)
+                                activeWidgets.add(index + 1, item)
+                                editingWidgetIndex = index + 1
+                                saveWidgets()
+                            }
+                        } else null
                     ) {
                         when (widgetData) {
                             is FocusWidgetData.BuiltInNotes -> {
                                 BuiltInNotesWidgetCard(
                                     content = widgetData.content,
-                                    onContentChange = { updated -> widgetData.content = updated },
+                                    onContentChange = { updated ->
+                                        widgetData.content = updated
+                                        saveWidgets()
+                                    },
                                     onRemove = {
                                         editingWidgetIndex = -1
                                         activeWidgets.removeAt(index)
+                                        saveWidgets()
                                     }
                                 )
                             }
                             is FocusWidgetData.BuiltInMantra -> {
                                 BuiltInMantraWidgetCard(
                                     quoteIndex = widgetData.quoteIndex,
-                                    onNextQuote = { widgetData.quoteIndex += 1 },
+                                    onNextQuote = {
+                                        widgetData.quoteIndex += 1
+                                        saveWidgets()
+                                    },
                                     onRemove = {
                                         editingWidgetIndex = -1
                                         activeWidgets.removeAt(index)
+                                        saveWidgets()
                                     }
                                 )
                             }
@@ -1245,6 +1291,7 @@ private fun FocusWidgetsPage(
                                     onRemove = {
                                         editingWidgetIndex = -1
                                         activeWidgets.removeAt(index)
+                                        saveWidgets()
                                     }
                                 )
                             }
@@ -1254,6 +1301,7 @@ private fun FocusWidgetsPage(
                                     onRemove = {
                                         editingWidgetIndex = -1
                                         activeWidgets.removeAt(index)
+                                        saveWidgets()
                                     }
                                 )
                             }
@@ -1265,6 +1313,7 @@ private fun FocusWidgetsPage(
                                     onRemove = {
                                         editingWidgetIndex = -1
                                         activeWidgets.removeAt(index)
+                                        saveWidgets()
                                     }
                                 )
                             }
@@ -1276,6 +1325,7 @@ private fun FocusWidgetsPage(
                                     onRemove = {
                                         editingWidgetIndex = -1
                                         activeWidgets.removeAt(index)
+                                        saveWidgets()
                                     }
                                 )
                             }
@@ -1296,22 +1346,27 @@ private fun FocusWidgetsPage(
             onDismiss = { showAddWidgetDialog = false },
             onAddBuiltInNotes = {
                 activeWidgets.add(FocusWidgetData.BuiltInNotes("Focus tasks & quick notes"))
+                saveWidgets()
                 showAddWidgetDialog = false
             },
             onAddBuiltInMantra = {
                 activeWidgets.add(FocusWidgetData.BuiltInMantra(0))
+                saveWidgets()
                 showAddWidgetDialog = false
             },
             onAddBuiltInTimer = {
                 activeWidgets.add(FocusWidgetData.BuiltInTimer(25))
+                saveWidgets()
                 showAddWidgetDialog = false
             },
             onAddBuiltInAudio = {
                 activeWidgets.add(FocusWidgetData.BuiltInAudio("Rain & White Noise Loop"))
+                saveWidgets()
                 showAddWidgetDialog = false
             },
             onAddAppShortcut = { app ->
                 activeWidgets.add(FocusWidgetData.AppShortcut(app.packageName, app.label))
+                saveWidgets()
                 showAddWidgetDialog = false
             },
             onAddSystemWidget = { provider ->
@@ -1339,10 +1394,12 @@ private fun FocusWidgetsPage(
                                 configureWidgetLauncher.launch(configIntent)
                             } catch (e: Throwable) {
                                 activeWidgets.add(FocusWidgetData.SystemWidget(widgetId, label, pkgName))
+                                saveWidgets()
                                 pendingWidgetId = -1
                             }
                         } else {
                             activeWidgets.add(FocusWidgetData.SystemWidget(widgetId, label, pkgName))
+                            saveWidgets()
                         }
                     } else {
                         pendingWidgetId = widgetId
