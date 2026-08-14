@@ -9,6 +9,7 @@ import android.appwidget.AppWidgetProviderInfo
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -17,6 +18,9 @@ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -30,9 +34,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyGridState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
@@ -64,9 +75,13 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material3.HorizontalDivider
 import com.example.model.FocusWidgetData
+import com.example.ui.components.StockWidgetResizeFrame
+import androidx.compose.runtime.key
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import com.example.util.DndManager
 import androidx.compose.material3.Button
@@ -815,7 +830,6 @@ private fun DndChooserDialog(
                                         modifier = Modifier.size(16.dp)
                                     )
                                 }
-                            }
                         }
                     }
                 }
@@ -823,190 +837,6 @@ private fun DndChooserDialog(
         }
     }
 }
-
-
-@Composable
-private fun StockWidgetEditWrapper(
-    isEditing: Boolean,
-    widthFraction: Float,
-    heightDp: Int,
-    onWidthFractionChange: (Float) -> Unit,
-    onHeightDpChange: (Int) -> Unit,
-    onRemove: () -> Unit,
-    onLongPress: () -> Unit,
-    onDismissEdit: () -> Unit,
-    onMoveUp: (() -> Unit)? = null,
-    onMoveDown: (() -> Unit)? = null,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit
-) {
-    var curWidth by remember(widthFraction) { mutableFloatStateOf(widthFraction) }
-    var curHeight by remember(heightDp) { mutableIntStateOf(heightDp) }
-    var offsetY by remember { mutableFloatStateOf(0f) }
-    var isDraggingItem by remember { mutableStateOf(false) }
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth(curWidth)
-            .padding(vertical = 4.dp)
-            .zIndex(if (isDraggingItem) 10f else 0f)
-            .graphicsLayer {
-                translationY = offsetY
-                if (isDraggingItem) {
-                    scaleX = 1.02f
-                    scaleY = 1.02f
-                }
-            }
-            .pointerInput(onMoveUp, onMoveDown) {
-                detectDragGesturesAfterLongPress(
-                    onDragStart = {
-                        isDraggingItem = true
-                        onLongPress()
-                    },
-                    onDrag = { change, dragAmount ->
-                        change.consume()
-                        offsetY += dragAmount.y
-                        val threshold = (curHeight + 16).toFloat()
-                        if (offsetY > threshold / 2f && onMoveDown != null) {
-                            onMoveDown()
-                            offsetY -= threshold
-                        } else if (offsetY < -threshold / 2f && onMoveUp != null) {
-                            onMoveUp()
-                            offsetY += threshold
-                        }
-                    },
-                    onDragEnd = {
-                        isDraggingItem = false
-                        offsetY = 0f
-                        onDismissEdit()
-                    },
-                    onDragCancel = {
-                        isDraggingItem = false
-                        offsetY = 0f
-                    }
-                )
-            }
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(
-                    if (isEditing) {
-                        Modifier
-                            .border(
-                                width = 1.5.dp,
-                                color = Color(0xFF64748B),
-                                shape = RoundedCornerShape(18.dp)
-                            )
-                            .background(
-                                color = Color(0xFF14151B),
-                                shape = RoundedCornerShape(18.dp)
-                            )
-                            .padding(4.dp)
-                    } else {
-                        Modifier
-                    }
-                )
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(curHeight.dp)
-            ) {
-                content()
-
-                // Transparent Gesture Interceptor Overlay Box placed ON TOP ONLY when editing
-                if (isEditing) {
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .pointerInput(Unit) {
-                                awaitEachGesture {
-                                    val down = awaitFirstDown(pass = PointerEventPass.Initial)
-                                    down.consume()
-                                    while (true) {
-                                        val event = awaitPointerEvent(pass = PointerEventPass.Initial)
-                                        event.changes.forEach { it.consume() }
-                                        if (event.changes.none { it.pressed }) break
-                                    }
-                                    onDismissEdit()
-                                }
-                            }
-                    )
-                }
-            }
-
-            // Bottom-Right Free 2D Drag Resize Handle (Horizontal, Vertical, Diagonal)
-            AnimatedVisibility(
-                visible = isEditing,
-                enter = fadeIn(),
-                exit = fadeOut(),
-                modifier = Modifier.align(Alignment.BottomEnd)
-            ) {
-                Surface(
-                    shape = CircleShape,
-                    color = Color(0xFF334155),
-                    shadowElevation = 4.dp,
-                    modifier = Modifier
-                        .size(26.dp)
-                        .clip(CircleShape)
-                        .pointerInput(Unit) {
-                            detectDragGestures { change, dragAmount ->
-                                change.consume()
-                                // Free horizontal drag (breadth)
-                                val newW = (curWidth + (dragAmount.x / 800f)).coerceIn(0.4f, 1.0f)
-                                curWidth = newW
-                                onWidthFractionChange(newW)
-
-                                // Free vertical drag (length)
-                                val newH = (curHeight + (dragAmount.y / 2f).toInt()).coerceIn(90, 500)
-                                curHeight = newH
-                                onHeightDpChange(newH)
-                            }
-                        }
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.UnfoldMore,
-                            contentDescription = "Free Drag Resize",
-                            tint = Color.White,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
-        }
-
-        // Top-Right Corner Delete Badge (Stock Launcher Experience)
-        AnimatedVisibility(
-            visible = isEditing,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(Alignment.TopEnd)
-        ) {
-            Surface(
-                shape = CircleShape,
-                color = Color(0xFFEF4444),
-                shadowElevation = 4.dp,
-                modifier = Modifier
-                    .size(26.dp)
-                    .clip(CircleShape)
-                    .clickable {
-                        onDismissEdit()
-                        onRemove()
-                    }
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Remove Widget",
-                        tint = Color.White,
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
-            }
-        }
-    }
 }
 
 @Composable
@@ -1019,7 +849,6 @@ private fun FocusWidgetsPage(
 ) {
     val context = LocalContext.current
     var showAddWidgetDialog by remember { mutableStateOf(false) }
-    var editingWidgetIndex by remember { mutableIntStateOf(-1) }
 
     var pendingWidgetId by remember { mutableIntStateOf(-1) }
     var pendingWidgetLabel by remember { mutableStateOf("") }
@@ -1123,139 +952,223 @@ private fun FocusWidgetsPage(
         }
     }
 
-    Column(
+    val focusManager = LocalFocusManager.current
+    var selectedWidgetId by remember { mutableStateOf<String?>(null) }
+
+    val lazyGridState = rememberLazyGridState()
+    val reorderableLazyGridState = rememberReorderableLazyGridState(lazyGridState) { from, to ->
+        // Adjust for header item at index 0
+        val fromIdx = from.index - 1
+        val toIdx = to.index - 1
+        if (fromIdx in 0 until activeWidgets.size && toIdx in 0 until activeWidgets.size) {
+            val item = activeWidgets.removeAt(fromIdx)
+            activeWidgets.add(toIdx, item)
+            saveWidgets()
+        }
+    }
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(editingWidgetIndex) {
-                if (editingWidgetIndex != -1) {
-                    detectTapGestures(
-                        onTap = {
-                            editingWidgetIndex = -1
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = {
+                        focusManager.clearFocus()
+                        if (selectedWidgetId != null) {
+                            selectedWidgetId = null
                             saveWidgets()
                         }
-                    )
-                }
-            }
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 20.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "FOCUS WIDGETS",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White.copy(alpha = 0.9f),
-                letterSpacing = 1.sp
-            )
-
-            Surface(
-                shape = CircleShape,
-                color = Color(0xFF334155),
-                shadowElevation = 4.dp,
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .clickable { showAddWidgetDialog = true }
-                    .testTag("add_widget_button")
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Add Widget",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        if (activeWidgets.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(180.dp)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(Color(0xFF16171D)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "No widgets added yet.\nTap '+' to add widgets.",
-                    color = Color.White.copy(alpha = 0.45f),
-                    fontSize = 14.sp,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    }
                 )
             }
-        } else {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                activeWidgets.forEachIndexed { index, widgetData ->
-                    val (hDp, wFrac) = when (widgetData) {
-                        is FocusWidgetData.BuiltInNotes -> widgetData.heightDp to widgetData.widthFraction
-                        is FocusWidgetData.BuiltInMantra -> widgetData.heightDp to widgetData.widthFraction
-                        is FocusWidgetData.BuiltInTimer -> widgetData.heightDp to widgetData.widthFraction
-                        is FocusWidgetData.BuiltInAudio -> widgetData.heightDp to widgetData.widthFraction
-                        is FocusWidgetData.AppShortcut -> widgetData.heightDp to widgetData.widthFraction
-                        is FocusWidgetData.SystemWidget -> widgetData.heightDp to widgetData.widthFraction
+    ) {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            state = lazyGridState,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+        ) {
+            // Grid Item 0: Header (Full Span)
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "FOCUS WIDGETS",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White.copy(alpha = 0.9f),
+                                letterSpacing = 1.sp
+                            )
+                            Text(
+                                text = "Hold to reorder or resize with border handles",
+                                fontSize = 11.sp,
+                                color = Color.White.copy(alpha = 0.45f)
+                            )
+                        }
+
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFF334155),
+                            shadowElevation = 4.dp,
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .clickable { showAddWidgetDialog = true }
+                                .testTag("add_widget_button")
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "Add Widget",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
                     }
 
-                    StockWidgetEditWrapper(
-                        isEditing = (editingWidgetIndex == index),
-                        widthFraction = wFrac,
-                        heightDp = hDp,
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    if (activeWidgets.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(180.dp)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(Color(0xFF16171D)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No widgets added yet.\nTap '+' to add widgets.",
+                                color = Color.White.copy(alpha = 0.45f),
+                                fontSize = 14.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Widget Items
+            items(
+                count = activeWidgets.size,
+                key = { activeWidgets[it].id },
+                span = { index ->
+                    val widget = activeWidgets[index]
+                    val isFullWidth = when (widget) {
+                        is FocusWidgetData.BuiltInNotes -> widget.widthFraction >= 0.8f
+                        is FocusWidgetData.BuiltInMantra -> widget.widthFraction >= 0.8f
+                        is FocusWidgetData.BuiltInTimer -> widget.widthFraction >= 0.8f
+                        is FocusWidgetData.BuiltInAudio -> widget.widthFraction >= 0.8f
+                        is FocusWidgetData.AppShortcut -> widget.widthFraction >= 0.8f
+                        is FocusWidgetData.SystemWidget -> widget.widthFraction >= 0.8f
+                    }
+                    GridItemSpan(if (isFullWidth) maxLineSpan else 1)
+                }
+            ) { index ->
+                val widgetData = activeWidgets[index]
+
+                ReorderableItem(
+                    state = reorderableLazyGridState,
+                    key = widgetData.id
+                ) { isDragging ->
+                    val isSelected = (selectedWidgetId == widgetData.id)
+
+                    val curHeight = when (widgetData) {
+                        is FocusWidgetData.BuiltInNotes -> widgetData.heightDp
+                        is FocusWidgetData.BuiltInMantra -> widgetData.heightDp
+                        is FocusWidgetData.BuiltInTimer -> widgetData.heightDp
+                        is FocusWidgetData.BuiltInAudio -> widgetData.heightDp
+                        is FocusWidgetData.AppShortcut -> widgetData.heightDp
+                        is FocusWidgetData.SystemWidget -> widgetData.heightDp
+                    }
+
+                    val curWidth = when (widgetData) {
+                        is FocusWidgetData.BuiltInNotes -> widgetData.widthFraction
+                        is FocusWidgetData.BuiltInMantra -> widgetData.widthFraction
+                        is FocusWidgetData.BuiltInTimer -> widgetData.widthFraction
+                        is FocusWidgetData.BuiltInAudio -> widgetData.widthFraction
+                        is FocusWidgetData.AppShortcut -> widgetData.widthFraction
+                        is FocusWidgetData.SystemWidget -> widgetData.widthFraction
+                    }
+
+                    StockWidgetResizeFrame(
+                        widgetId = widgetData.id,
+                        isSelected = isSelected,
+                        isDragging = isDragging,
+                        widthFraction = curWidth,
+                        heightDp = curHeight,
+                        onEnterEditMode = {
+                            selectedWidgetId = widgetData.id
+                        },
+                        onDismissEditMode = {
+                            selectedWidgetId = null
+                            saveWidgets()
+                        },
                         onWidthFractionChange = { newW ->
-                            when (widgetData) {
-                                is FocusWidgetData.BuiltInNotes -> widgetData.widthFraction = newW
-                                is FocusWidgetData.BuiltInMantra -> widgetData.widthFraction = newW
-                                is FocusWidgetData.BuiltInTimer -> widgetData.widthFraction = newW
-                                is FocusWidgetData.BuiltInAudio -> widgetData.widthFraction = newW
-                                is FocusWidgetData.AppShortcut -> widgetData.widthFraction = newW
-                                is FocusWidgetData.SystemWidget -> widgetData.widthFraction = newW
+                            val updated = when (widgetData) {
+                                is FocusWidgetData.BuiltInNotes -> widgetData.copy(widthFraction = newW)
+                                is FocusWidgetData.BuiltInMantra -> widgetData.copy(widthFraction = newW)
+                                is FocusWidgetData.BuiltInTimer -> widgetData.copy(widthFraction = newW)
+                                is FocusWidgetData.BuiltInAudio -> widgetData.copy(widthFraction = newW)
+                                is FocusWidgetData.AppShortcut -> widgetData.copy(widthFraction = newW)
+                                is FocusWidgetData.SystemWidget -> widgetData.copy(widthFraction = newW)
+                            }
+                            if (index in 0 until activeWidgets.size) {
+                                activeWidgets[index] = updated
+                                saveWidgets()
                             }
                         },
                         onHeightDpChange = { newH ->
-                            when (widgetData) {
-                                is FocusWidgetData.BuiltInNotes -> widgetData.heightDp = newH
-                                is FocusWidgetData.BuiltInMantra -> widgetData.heightDp = newH
-                                is FocusWidgetData.BuiltInTimer -> widgetData.heightDp = newH
-                                is FocusWidgetData.BuiltInAudio -> widgetData.heightDp = newH
-                                is FocusWidgetData.AppShortcut -> widgetData.heightDp = newH
-                                is FocusWidgetData.SystemWidget -> widgetData.heightDp = newH
+                            val updated = when (widgetData) {
+                                is FocusWidgetData.BuiltInNotes -> widgetData.copy(heightDp = newH)
+                                is FocusWidgetData.BuiltInMantra -> widgetData.copy(heightDp = newH)
+                                is FocusWidgetData.BuiltInTimer -> widgetData.copy(heightDp = newH)
+                                is FocusWidgetData.BuiltInAudio -> widgetData.copy(heightDp = newH)
+                                is FocusWidgetData.AppShortcut -> widgetData.copy(heightDp = newH)
+                                is FocusWidgetData.SystemWidget -> widgetData.copy(heightDp = newH)
+                            }
+                            if (index in 0 until activeWidgets.size) {
+                                activeWidgets[index] = updated
+                                saveWidgets()
                             }
                         },
                         onRemove = {
-                            editingWidgetIndex = -1
-                            activeWidgets.removeAt(index)
-                            saveWidgets()
-                        },
-                        onLongPress = { editingWidgetIndex = index },
-                        onDismissEdit = {
-                            editingWidgetIndex = -1
-                            saveWidgets()
-                        },
-                        onMoveUp = if (index > 0) {
-                            {
-                                val item = activeWidgets.removeAt(index)
-                                activeWidgets.add(index - 1, item)
-                                editingWidgetIndex = index - 1
+                            if (widgetData is FocusWidgetData.SystemWidget) {
+                                try {
+                                    appWidgetHost.deleteAppWidgetId(widgetData.widgetId)
+                                } catch (e: Throwable) {
+                                    e.printStackTrace()
+                                }
+                            }
+                            if (index in 0 until activeWidgets.size) {
+                                activeWidgets.removeAt(index)
                                 saveWidgets()
                             }
-                        } else null,
-                        onMoveDown = if (index < activeWidgets.lastIndex) {
-                            {
-                                val item = activeWidgets.removeAt(index)
-                                activeWidgets.add(index + 1, item)
-                                editingWidgetIndex = index + 1
-                                saveWidgets()
+                            if (selectedWidgetId == widgetData.id) {
+                                selectedWidgetId = null
                             }
-                        } else null
+                        },
+                        modifier = Modifier
+                            .longPressDraggableHandle(
+                                onDragStarted = {
+                                    selectedWidgetId = widgetData.id
+                                }
+                            )
+                            .graphicsLayer {
+                                scaleX = if (isDragging) 1.05f else 1.0f
+                                scaleY = if (isDragging) 1.05f else 1.0f
+                                shadowElevation = if (isDragging) 20.dp.toPx() else 0f
+                                alpha = if (isDragging) 0.9f else 1.0f
+                            }
                     ) {
                         when (widgetData) {
                             is FocusWidgetData.BuiltInNotes -> {
@@ -1266,9 +1179,10 @@ private fun FocusWidgetsPage(
                                         saveWidgets()
                                     },
                                     onRemove = {
-                                        editingWidgetIndex = -1
-                                        activeWidgets.removeAt(index)
-                                        saveWidgets()
+                                        if (index in 0 until activeWidgets.size) {
+                                            activeWidgets.removeAt(index)
+                                            saveWidgets()
+                                        }
                                     }
                                 )
                             }
@@ -1280,18 +1194,20 @@ private fun FocusWidgetsPage(
                                         saveWidgets()
                                     },
                                     onRemove = {
-                                        editingWidgetIndex = -1
-                                        activeWidgets.removeAt(index)
-                                        saveWidgets()
+                                        if (index in 0 until activeWidgets.size) {
+                                            activeWidgets.removeAt(index)
+                                            saveWidgets()
+                                        }
                                     }
                                 )
                             }
                             is FocusWidgetData.BuiltInTimer -> {
                                 BuiltInTimerWidgetCard(
                                     onRemove = {
-                                        editingWidgetIndex = -1
-                                        activeWidgets.removeAt(index)
-                                        saveWidgets()
+                                        if (index in 0 until activeWidgets.size) {
+                                            activeWidgets.removeAt(index)
+                                            saveWidgets()
+                                        }
                                     }
                                 )
                             }
@@ -1299,9 +1215,10 @@ private fun FocusWidgetsPage(
                                 BuiltInAudioWidgetCard(
                                     title = widgetData.title,
                                     onRemove = {
-                                        editingWidgetIndex = -1
-                                        activeWidgets.removeAt(index)
-                                        saveWidgets()
+                                        if (index in 0 until activeWidgets.size) {
+                                            activeWidgets.removeAt(index)
+                                            saveWidgets()
+                                        }
                                     }
                                 )
                             }
@@ -1311,9 +1228,10 @@ private fun FocusWidgetsPage(
                                     appName = widgetData.appName,
                                     allApps = allApps,
                                     onRemove = {
-                                        editingWidgetIndex = -1
-                                        activeWidgets.removeAt(index)
-                                        saveWidgets()
+                                        if (index in 0 until activeWidgets.size) {
+                                            activeWidgets.removeAt(index)
+                                            saveWidgets()
+                                        }
                                     }
                                 )
                             }
@@ -1323,9 +1241,15 @@ private fun FocusWidgetsPage(
                                     appWidgetHost = appWidgetHost,
                                     appWidgetManager = appWidgetManager,
                                     onRemove = {
-                                        editingWidgetIndex = -1
-                                        activeWidgets.removeAt(index)
-                                        saveWidgets()
+                                        try {
+                                            appWidgetHost.deleteAppWidgetId(widgetData.widgetId)
+                                        } catch (e: Throwable) {
+                                            e.printStackTrace()
+                                        }
+                                        if (index in 0 until activeWidgets.size) {
+                                            activeWidgets.removeAt(index)
+                                            saveWidgets()
+                                        }
                                     }
                                 )
                             }
@@ -1333,12 +1257,72 @@ private fun FocusWidgetsPage(
                     }
                 }
             }
+
+            // Footer Bottom Spacer (Full Span)
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Spacer(modifier = Modifier.height(80.dp))
+            }
         }
 
-        Spacer(modifier = Modifier.height(80.dp))
-    }
+        // Top Drop-to-Delete Action Bar (Stock Launcher drop zone)
+        AnimatedVisibility(
+            visible = (selectedWidgetId != null),
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically(),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 12.dp)
+                .zIndex(30f)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = Color(0xFF1E202B).copy(alpha = 0.95f),
+                border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.6f)),
+                shadowElevation = 10.dp,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .clickable {
+                        val selId = selectedWidgetId
+                        if (selId != null) {
+                            val idx = activeWidgets.indexOfFirst { it.id == selId }
+                            if (idx >= 0) {
+                                val item = activeWidgets[idx]
+                                if (item is FocusWidgetData.SystemWidget) {
+                                    try {
+                                        appWidgetHost.deleteAppWidgetId(item.widgetId)
+                                    } catch (e: Throwable) {
+                                        e.printStackTrace()
+                                    }
+                                }
+                                activeWidgets.removeAt(idx)
+                                saveWidgets()
+                            }
+                            selectedWidgetId = null
+                        }
+                    }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Drop to remove",
+                        tint = Color(0xFFEF4444),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Remove Selected Widget",
+                        color = Color(0xFFEF4444),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        }
 
-    if (showAddWidgetDialog) {
+        if (showAddWidgetDialog) {
         AddFocusWidgetDialog(
             appWidgetManager = appWidgetManager,
             appWidgetHost = appWidgetHost,
@@ -1426,6 +1410,7 @@ private fun FocusWidgetsPage(
         )
     }
 }
+}
 
 @Composable
 private fun BuiltInNotesWidgetCard(
@@ -1433,7 +1418,8 @@ private fun BuiltInNotesWidgetCard(
     onContentChange: (String) -> Unit,
     onRemove: () -> Unit
 ) {
-    var text by remember { mutableStateOf(content) }
+    var text by remember(content) { mutableStateOf(content) }
+    val focusManager = LocalFocusManager.current
 
     Surface(
         shape = RoundedCornerShape(20.dp),
@@ -1462,16 +1448,32 @@ private fun BuiltInNotesWidgetCard(
                     )
                 }
 
-                IconButton(
-                    onClick = onRemove,
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Remove",
-                        tint = Color.White.copy(alpha = 0.4f),
-                        modifier = Modifier.size(16.dp)
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = {
+                            focusManager.clearFocus()
+                            onContentChange(text)
+                        },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Save Notes",
+                            tint = Color(0xFF10B981),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    IconButton(
+                        onClick = onRemove,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Remove",
+                            tint = Color.White.copy(alpha = 0.4f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
             }
 
@@ -1483,6 +1485,13 @@ private fun BuiltInNotesWidgetCard(
                     text = it
                     onContentChange(it)
                 },
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                    onDone = {
+                        focusManager.clearFocus()
+                        onContentChange(text)
+                    }
+                ),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = Color(0xFFCE93D8),
                     unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
@@ -1873,7 +1882,8 @@ private fun SystemWidgetHostCard(
                             val displayMetrics = view.resources.displayMetrics
                             val density = displayMetrics.density
                             val widthPx = if (view.width > 0) view.width else displayMetrics.widthPixels
-                            val minWidthDp = (widthPx / density).toInt().coerceAtLeast(100)
+                            val isFull = widgetData.widthFraction >= 0.8f
+                            val minWidthDp = if (isFull) (widthPx / density).toInt().coerceAtLeast(100) else ((widthPx / density) / 2).toInt().coerceAtLeast(100)
                             val minHeightDp = widgetData.heightDp.coerceAtLeast(40)
 
                             val options = android.os.Bundle().apply {

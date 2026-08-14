@@ -4,43 +4,51 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 sealed class FocusWidgetData {
+    abstract val id: String
+
     data class SystemWidget(
         val widgetId: Int,
         val label: String,
         val packageName: String = "",
         var heightDp: Int = 180,
-        var widthFraction: Float = 1.0f
+        var widthFraction: Float = 1.0f,
+        override val id: String = java.util.UUID.randomUUID().toString()
     ) : FocusWidgetData()
 
     data class BuiltInNotes(
         var content: String,
         var heightDp: Int = 180,
-        var widthFraction: Float = 1.0f
+        var widthFraction: Float = 1.0f,
+        override val id: String = java.util.UUID.randomUUID().toString()
     ) : FocusWidgetData()
 
     data class BuiltInMantra(
         var quoteIndex: Int,
         var heightDp: Int = 140,
-        var widthFraction: Float = 1.0f
+        var widthFraction: Float = 1.0f,
+        override val id: String = java.util.UUID.randomUUID().toString()
     ) : FocusWidgetData()
 
     data class BuiltInTimer(
         var durationMinutes: Int = 25,
         var heightDp: Int = 160,
-        var widthFraction: Float = 1.0f
+        var widthFraction: Float = 1.0f,
+        override val id: String = java.util.UUID.randomUUID().toString()
     ) : FocusWidgetData()
 
     data class BuiltInAudio(
         val title: String = "Rain & Lo-Fi Focus Sound",
         var heightDp: Int = 180,
-        var widthFraction: Float = 1.0f
+        var widthFraction: Float = 1.0f,
+        override val id: String = java.util.UUID.randomUUID().toString()
     ) : FocusWidgetData()
 
     data class AppShortcut(
         val packageName: String,
         val appName: String,
         var heightDp: Int = 120,
-        var widthFraction: Float = 1.0f
+        var widthFraction: Float = 1.0f,
+        override val id: String = java.util.UUID.randomUUID().toString()
     ) : FocusWidgetData()
 }
 
@@ -48,6 +56,7 @@ fun focusWidgetsToJson(widgets: List<FocusWidgetData>): String {
     val array = JSONArray()
     for (widget in widgets) {
         val obj = JSONObject()
+        obj.put("id", widget.id)
         when (widget) {
             is FocusWidgetData.SystemWidget -> {
                 obj.put("type", "SYSTEM_WIDGET")
@@ -102,6 +111,7 @@ fun focusWidgetsFromJson(jsonString: String?): List<FocusWidgetData> {
         for (i in 0 until array.length()) {
             val obj = array.getJSONObject(i)
             val type = obj.optString("type")
+            val id = obj.optString("id").ifEmpty { java.util.UUID.randomUUID().toString() }
             val heightDp = obj.optInt("heightDp", 180)
             val widthFraction = obj.optDouble("widthFraction", 1.0).toFloat()
             when (type) {
@@ -111,35 +121,40 @@ fun focusWidgetsFromJson(jsonString: String?): List<FocusWidgetData> {
                         label = obj.optString("label"),
                         packageName = obj.optString("packageName"),
                         heightDp = heightDp,
-                        widthFraction = widthFraction
+                        widthFraction = widthFraction,
+                        id = id
                     )
                 )
                 "BUILTIN_NOTES" -> list.add(
                     FocusWidgetData.BuiltInNotes(
                         content = obj.optString("content"),
                         heightDp = heightDp,
-                        widthFraction = widthFraction
+                        widthFraction = widthFraction,
+                        id = id
                     )
                 )
                 "BUILTIN_MANTRA" -> list.add(
                     FocusWidgetData.BuiltInMantra(
                         quoteIndex = obj.optInt("quoteIndex"),
                         heightDp = heightDp,
-                        widthFraction = widthFraction
+                        widthFraction = widthFraction,
+                        id = id
                     )
                 )
                 "BUILTIN_TIMER" -> list.add(
                     FocusWidgetData.BuiltInTimer(
                         durationMinutes = obj.optInt("durationMinutes", 25),
                         heightDp = heightDp,
-                        widthFraction = widthFraction
+                        widthFraction = widthFraction,
+                        id = id
                     )
                 )
                 "BUILTIN_AUDIO" -> list.add(
                     FocusWidgetData.BuiltInAudio(
                         title = obj.optString("title", "Rain & Lo-Fi Focus Sound"),
                         heightDp = heightDp,
-                        widthFraction = widthFraction
+                        widthFraction = widthFraction,
+                        id = id
                     )
                 )
                 "APP_SHORTCUT" -> list.add(
@@ -147,7 +162,8 @@ fun focusWidgetsFromJson(jsonString: String?): List<FocusWidgetData> {
                         packageName = obj.optString("packageName"),
                         appName = obj.optString("appName"),
                         heightDp = heightDp,
-                        widthFraction = widthFraction
+                        widthFraction = widthFraction,
+                        id = id
                     )
                 )
             }

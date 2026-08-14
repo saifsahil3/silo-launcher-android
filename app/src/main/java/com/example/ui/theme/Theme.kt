@@ -4,21 +4,23 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 
-private val ElegantDarkColorScheme = darkColorScheme(
-    primary = ElegantDarkPrimary,
+private val SiloDarkColorScheme = darkColorScheme(
+    primary = SiloBrandBlueLight,
     onPrimary = ElegantDarkOnPrimary,
-    primaryContainer = ElegantDarkPrimaryContainer,
-    onPrimaryContainer = ElegantDarkOnPrimaryContainer,
-    secondary = ElegantDarkPrimary,
+    primaryContainer = SiloBrandContainer,
+    onPrimaryContainer = SiloOnBrandContainer,
+    secondary = SiloBrandBlueLight,
     onSecondary = ElegantDarkOnPrimary,
-    background = ElegantDarkBg,
-    onBackground = ElegantDarkOnSurface,
-    surface = ElegantDarkSurface,
-    onSurface = ElegantDarkOnSurface,
-    surfaceVariant = ElegantDarkSurfaceVariant,
-    onSurfaceVariant = ElegantDarkOnSurfaceVariant,
-    outline = ElegantDarkOutline,
-    outlineVariant = ElegantDarkSubtleBorder
+    secondaryContainer = SiloDarkSurfaceVariant,
+    onSecondaryContainer = SiloDarkOnSurface,
+    background = SiloDarkBg,
+    onBackground = SiloDarkOnSurface,
+    surface = SiloDarkSurface,
+    onSurface = SiloDarkOnSurface,
+    surfaceVariant = SiloDarkSurfaceVariant,
+    onSurfaceVariant = SiloDarkOnSurfaceVariant,
+    outline = SiloDarkOutline,
+    outlineVariant = SiloDarkSubtleBorder
 )
 
 @Composable
@@ -28,7 +30,7 @@ fun MyApplicationTheme(
     content: @Composable () -> Unit
 ) {
     MaterialTheme(
-        colorScheme = ElegantDarkColorScheme,
+        colorScheme = SiloDarkColorScheme,
         typography = Typography,
         content = content
     )

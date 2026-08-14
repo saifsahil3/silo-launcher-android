@@ -243,6 +243,32 @@ fun ModeSelectorHeader(
                         )
 
                         ModeItemOption(
+                            mode = LauncherMode.E_PAPER,
+                            currentMode = currentMode,
+                            icon = Icons.AutoMirrored.Filled.MenuBook,
+                            label = "E-Paper",
+                            accentColor = Color(0xFF8D6E63),
+                            onSelect = {
+                                showVerticalOverlay = false
+                                isExpanded = false
+                                onModeSelected(LauncherMode.E_PAPER)
+                            }
+                        )
+
+                        ModeItemOption(
+                            mode = LauncherMode.CREATOR,
+                            currentMode = currentMode,
+                            icon = Icons.Default.VideoCall,
+                            label = "Creator",
+                            accentColor = Color(0xFF3F51B5),
+                            onSelect = {
+                                showVerticalOverlay = false
+                                isExpanded = false
+                                onModeSelected(LauncherMode.CREATOR)
+                            }
+                        )
+
+                        ModeItemOption(
                             mode = LauncherMode.DRIVE,
                             currentMode = currentMode,
                             icon = Icons.Default.DirectionsCar,
@@ -269,15 +295,15 @@ fun ModeSelectorHeader(
                         )
 
                         ModeItemOption(
-                            mode = LauncherMode.E_PAPER,
+                            mode = LauncherMode.ALL_APPS,
                             currentMode = currentMode,
-                            icon = Icons.AutoMirrored.Filled.MenuBook,
-                            label = "E-Paper",
-                            accentColor = Color(0xFF8D6E63),
+                            icon = Icons.Default.GridView,
+                            label = "All Apps",
+                            accentColor = Color(0xFF00897B),
                             onSelect = {
                                 showVerticalOverlay = false
                                 isExpanded = false
-                                onModeSelected(LauncherMode.E_PAPER)
+                                onModeSelected(LauncherMode.ALL_APPS)
                             }
                         )
 

@@ -221,20 +221,7 @@ fun FloatingModeControl(
                             }
                         )
 
-                        // 2. Drive Mode
-                        FloatingModeOption(
-                            mode = LauncherMode.DRIVE,
-                            currentMode = currentMode,
-                            icon = Icons.Default.DirectionsCar,
-                            label = "Drive",
-                            accentColor = Color(0xFFE65100),
-                            onSelect = {
-                                menuState = FloatingMenuState.CLOSED
-                                onModeSelected(LauncherMode.DRIVE)
-                            }
-                        )
-
-                        // 3. E-Paper Mode
+                        // 2. E-Paper Mode
                         FloatingModeOption(
                             mode = LauncherMode.E_PAPER,
                             currentMode = currentMode,
@@ -247,7 +234,33 @@ fun FloatingModeControl(
                             }
                         )
 
-                        // 4. Sleep Mode
+                        // 3. Creator Mode
+                        FloatingModeOption(
+                            mode = LauncherMode.CREATOR,
+                            currentMode = currentMode,
+                            icon = Icons.Default.VideoCall,
+                            label = "Creator",
+                            accentColor = Color(0xFF3F51B5),
+                            onSelect = {
+                                menuState = FloatingMenuState.CLOSED
+                                onModeSelected(LauncherMode.CREATOR)
+                            }
+                        )
+
+                        // 4. Drive Mode
+                        FloatingModeOption(
+                            mode = LauncherMode.DRIVE,
+                            currentMode = currentMode,
+                            icon = Icons.Default.DirectionsCar,
+                            label = "Drive",
+                            accentColor = Color(0xFFE65100),
+                            onSelect = {
+                                menuState = FloatingMenuState.CLOSED
+                                onModeSelected(LauncherMode.DRIVE)
+                            }
+                        )
+
+                        // 5. Sleep Mode
                         FloatingModeOption(
                             mode = LauncherMode.SLEEP,
                             currentMode = currentMode,
@@ -260,7 +273,7 @@ fun FloatingModeControl(
                             }
                         )
 
-                        // 5. All Apps Mode
+                        // 6. All Apps Mode
                         FloatingModeOption(
                             mode = LauncherMode.ALL_APPS,
                             currentMode = currentMode,
@@ -270,19 +283,6 @@ fun FloatingModeControl(
                             onSelect = {
                                 menuState = FloatingMenuState.CLOSED
                                 onModeSelected(LauncherMode.ALL_APPS)
-                            }
-                        )
-
-                        // 6. Creator Mode
-                        FloatingModeOption(
-                            mode = LauncherMode.CREATOR,
-                            currentMode = currentMode,
-                            icon = Icons.Default.VideoCall,
-                            label = "Creator",
-                            accentColor = Color(0xFF3F51B5),
-                            onSelect = {
-                                menuState = FloatingMenuState.CLOSED
-                                onModeSelected(LauncherMode.CREATOR)
                             }
                         )
 

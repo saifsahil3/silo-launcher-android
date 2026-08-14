@@ -2,7 +2,8 @@
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item
         android:drawable="@drawable/silo_logo"
-        android:width="77dp"
-        android:height="70dp"
+        android:width="64dp"
+        android:height="58dp"
         android:gravity="center" />
 </layer-list>
+

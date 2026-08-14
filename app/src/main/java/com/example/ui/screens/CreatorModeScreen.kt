@@ -154,37 +154,37 @@ private fun CreatorEntryScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0F0F12))
-            .padding(horizontal = 24.dp, vertical = 40.dp),
+            .background(Color(0xFF0D0E12))
+            .padding(horizontal = 20.dp, vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        // App Logo Icon
         Box(
             modifier = Modifier
                 .size(72.dp)
                 .clip(CircleShape)
                 .background(Color(0xFF161622))
-                .border(1.dp, Color.White.copy(alpha = 0.1f), CircleShape),
+                .border(1.dp, Color(0xFF6366F1).copy(alpha = 0.35f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
             if (logoBitmap != null) {
                 Image(
                     bitmap = logoBitmap,
                     contentDescription = "Silo Launcher Logo",
-                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                    modifier = Modifier.size(56.dp)
+                    modifier = Modifier.size(54.dp)
                 )
             } else {
                 Icon(
                     imageVector = Icons.Default.Palette,
                     contentDescription = "Silo Launcher Logo",
-                    tint = Color(0xFF3F51B5),
-                    modifier = Modifier.size(44.dp)
+                    tint = Color(0xFF6366F1),
+                    modifier = Modifier.size(38.dp)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         Text(
             text = "Creator Mode",
@@ -193,101 +193,110 @@ private fun CreatorEntryScreen(
             color = Color.White
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
         Text(
-            text = "What are you working on?",
-            fontSize = 14.sp,
+            text = "Choose your stage",
+            fontSize = 13.sp,
             color = Color.White.copy(alpha = 0.5f)
         )
 
-        Spacer(modifier = Modifier.height(40.dp))
+        Spacer(modifier = Modifier.height(36.dp))
 
-        CreatorStageOptionButton(
-            title = "Shoot",
-            subtitle = "Capture photos, videos, or audio",
-            icon = Icons.Default.Camera,
-            onClick = { onStartSession("shoot") }
-        )
+        // Three Big Minimal Icon Tiles
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CreatorBigStageIconTile(
+                title = "Shoot",
+                icon = Icons.Default.Camera,
+                accentColor = Color(0xFF6366F1),
+                onClick = { onStartSession("shoot") },
+                modifier = Modifier.weight(1f)
+            )
 
-        Spacer(modifier = Modifier.height(16.dp))
+            CreatorBigStageIconTile(
+                title = "Edit",
+                icon = Icons.Default.Movie,
+                accentColor = Color(0xFF8B5CF6),
+                onClick = { onStartSession("edit") },
+                modifier = Modifier.weight(1f)
+            )
 
-        CreatorStageOptionButton(
-            title = "Editing",
-            subtitle = "Refine, trim, and assemble draft content",
-            icon = Icons.Default.Movie,
-            onClick = { onStartSession("edit") }
-        )
+            CreatorBigStageIconTile(
+                title = "Publish",
+                icon = Icons.Default.Publish,
+                accentColor = Color(0xFFEC4899),
+                onClick = { onStartSession("publish") },
+                modifier = Modifier.weight(1f)
+            )
+        }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(44.dp))
 
-        CreatorStageOptionButton(
-            title = "Publish",
-            subtitle = "Upload, format, and push to audience",
-            icon = Icons.Default.Publish,
-            onClick = { onStartSession("publish") }
+        // Bottom One-Liner Description Text
+        Text(
+            text = "Streamlined environments for shooting, editing, and publishing content without distractions.",
+            fontSize = 12.sp,
+            color = Color.White.copy(alpha = 0.4f),
+            textAlign = TextAlign.Center,
+            lineHeight = 17.sp,
+            modifier = Modifier.padding(horizontal = 16.dp)
         )
     }
 }
 
 @Composable
-private fun CreatorStageOptionButton(
+private fun CreatorBigStageIconTile(
     title: String,
-    subtitle: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: () -> Unit
+    accentColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(80.dp)
+    Surface(
+        modifier = modifier
+            .height(118.dp)
+            .clip(RoundedCornerShape(22.dp))
             .clickable { onClick() }
             .testTag("creator_entry_stage_$title"),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF161622)),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+        shape = RoundedCornerShape(22.dp),
+        color = Color(0xFF151720),
+        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.25f))
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 20.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
             Box(
                 modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF3F51B5).copy(alpha = 0.15f)),
+                    .size(54.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(accentColor.copy(alpha = 0.15f))
+                    .border(1.dp, accentColor.copy(alpha = 0.35f), RoundedCornerShape(16.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
-                    contentDescription = null,
-                    tint = Color(0xFF5C6BC0),
-                    modifier = Modifier.size(24.dp)
+                    contentDescription = title,
+                    tint = accentColor,
+                    modifier = Modifier.size(28.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Text(
-                    text = subtitle,
-                    fontSize = 12.sp,
-                    color = Color.White.copy(alpha = 0.5f)
-                )
-            }
-
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = null,
-                tint = Color.White.copy(alpha = 0.2f)
+            Text(
+                text = title,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                textAlign = TextAlign.Center
             )
         }
     }
@@ -353,7 +362,7 @@ private fun CreatorWorkspacePage(
                 Icon(
                     imageVector = stageIcon,
                     contentDescription = null,
-                    tint = Color(0xFF3F51B5),
+                    tint = Color(0xFF6366F1),
                     modifier = Modifier.size(22.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -409,7 +418,7 @@ private fun CreatorWorkspacePage(
                     modifier = Modifier
                         .size(34.dp)
                         .clip(CircleShape)
-                        .background(if (sessionState.isPaused) Color(0xFF3F51B5) else Color(0xFFEF5350).copy(alpha = 0.25f))
+                        .background(if (sessionState.isPaused) Color(0xFF6366F1) else Color(0xFFEF5350).copy(alpha = 0.25f))
                 ) {
                     Icon(
                         imageVector = if (sessionState.isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
@@ -423,17 +432,17 @@ private fun CreatorWorkspacePage(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Primary Apps Section Header
+        // Primary Apps Section Header (Strict Limit 3 Apps)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "PRIMARY APPS (${primaryApps.size})",
+                text = "PRIMARY APPS (${primaryApps.size}/3)",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White.copy(alpha = 0.4f),
+                color = Color.White.copy(alpha = 0.5f),
                 letterSpacing = 1.sp
             )
             IconButton(
@@ -443,7 +452,7 @@ private fun CreatorWorkspacePage(
                 Icon(
                     imageVector = Icons.Default.Edit,
                     contentDescription = "Edit Primary Apps",
-                    tint = Color(0xFF5C6BC0),
+                    tint = Color(0xFF818CF8),
                     modifier = Modifier.size(16.dp)
                 )
             }
@@ -461,14 +470,14 @@ private fun CreatorWorkspacePage(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "No Primary Apps configured",
+                    text = "No Primary Apps configured (Max 3)",
                     color = Color.White.copy(alpha = 0.3f),
                     fontSize = 13.sp
                 )
             }
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                primaryApps.forEachIndexed { idx, app ->
+                primaryApps.take(3).forEachIndexed { idx, app ->
                     AppShortcutCard(
                         appInfo = app,
                         highlighted = (idx == 0),
@@ -480,17 +489,17 @@ private fun CreatorWorkspacePage(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Support Apps Section Header
+        // Support Apps Section Header (Strict Limit 4 Apps)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "SUPPORT APPS (${supportApps.size})",
+                text = "SUPPORT APPS (${supportApps.size}/4)",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White.copy(alpha = 0.4f),
+                color = Color.White.copy(alpha = 0.5f),
                 letterSpacing = 1.sp
             )
             IconButton(
@@ -500,7 +509,7 @@ private fun CreatorWorkspacePage(
                 Icon(
                     imageVector = Icons.Default.Edit,
                     contentDescription = "Edit Support Apps",
-                    tint = Color(0xFF5C6BC0),
+                    tint = Color(0xFF818CF8),
                     modifier = Modifier.size(16.dp)
                 )
             }
@@ -518,14 +527,14 @@ private fun CreatorWorkspacePage(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "No Support Apps configured",
+                    text = "No Support Apps configured (Max 4)",
                     color = Color.White.copy(alpha = 0.3f),
                     fontSize = 13.sp
                 )
             }
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                supportApps.forEach { app ->
+                supportApps.take(4).forEach { app ->
                     AppShortcutCard(
                         appInfo = app,
                         highlighted = false,
@@ -573,6 +582,7 @@ private fun CreatorWorkspacePage(
             title = "Select Primary Apps",
             allApps = allApps,
             selectedPackages = primaryPackages.toSet(),
+            maxApps = 3,
             onDismiss = { showPrimaryPicker = false },
             onSave = { selected ->
                 viewModel.updateStageApps(sessionState.currentStageId, selected.toList(), supportPackages)
@@ -587,6 +597,7 @@ private fun CreatorWorkspacePage(
             title = "Select Support Apps",
             allApps = allApps,
             selectedPackages = supportPackages.toSet(),
+            maxApps = 4,
             onDismiss = { showSupportPicker = false },
             onSave = { selected ->
                 viewModel.updateStageApps(sessionState.currentStageId, primaryPackages, selected.toList())
@@ -1221,10 +1232,14 @@ private fun CreatorStageAppPickerDialog(
     title: String,
     allApps: List<AppInfo>,
     selectedPackages: Set<String>,
+    maxApps: Int,
     onDismiss: () -> Unit,
     onSave: (Set<String>) -> Unit
 ) {
-    var tempSelected by remember { mutableStateOf(selectedPackages) }
+    // Filter initial selectedPackages to only keep packages that exist in allApps (fixes count mismatch)
+    var tempSelected by remember(selectedPackages, allApps) {
+        mutableStateOf(selectedPackages.filter { pkg -> allApps.any { it.packageName == pkg } }.toSet())
+    }
     var searchQuery by remember { mutableStateOf("") }
 
     val filteredApps = remember(allApps, searchQuery) {
@@ -1237,6 +1252,8 @@ private fun CreatorStageAppPickerDialog(
             }
         }
     }
+
+    val isMaxReached = tempSelected.size >= maxApps
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -1264,11 +1281,23 @@ private fun CreatorStageAppPickerDialog(
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
-                        Text(
-                            text = "${tempSelected.size} app(s) selected",
-                            fontSize = 12.sp,
-                            color = Color.White.copy(alpha = 0.5f)
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "${tempSelected.size} / $maxApps app(s) selected",
+                                fontSize = 12.sp,
+                                color = if (isMaxReached) Color(0xFFFFB74D) else Color.White.copy(alpha = 0.5f),
+                                fontWeight = if (isMaxReached) FontWeight.Bold else FontWeight.Normal
+                            )
+                            if (isMaxReached) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "• LIMIT REACHED",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFFFFB74D)
+                                )
+                            }
+                        }
                     }
                     IconButton(onClick = onDismiss) {
                         Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = Color.White)
@@ -1293,7 +1322,7 @@ private fun CreatorStageAppPickerDialog(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF3F51B5),
+                        focusedBorderColor = Color(0xFF6366F1),
                         unfocusedBorderColor = Color.White.copy(alpha = 0.1f),
                         focusedContainerColor = Color(0xFF161622),
                         unfocusedContainerColor = Color(0xFF161622),
@@ -1313,15 +1342,17 @@ private fun CreatorStageAppPickerDialog(
                 ) {
                     items(filteredApps) { appInfo ->
                         val isChecked = tempSelected.contains(appInfo.packageName)
+                        val isDisabled = isMaxReached && !isChecked
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(10.dp))
-                                .clickable {
+                                .clickable(enabled = !isDisabled) {
                                     val current = tempSelected.toMutableSet()
-                                    if (current.contains(appInfo.packageName)) {
+                                    if (isChecked) {
                                         current.remove(appInfo.packageName)
-                                    } else {
+                                    } else if (current.size < maxApps) {
                                         current.add(appInfo.packageName)
                                     }
                                     tempSelected = current
@@ -1361,14 +1392,15 @@ private fun CreatorStageAppPickerDialog(
                                     text = appInfo.label,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Medium,
-                                    color = Color.White,
+                                    color = if (isDisabled) Color.White.copy(alpha = 0.3f) else Color.White,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
                             Checkbox(
                                 checked = isChecked,
-                                onCheckedChange = null
+                                onCheckedChange = null,
+                                enabled = !isDisabled
                             )
                         }
                     }
@@ -1378,11 +1410,11 @@ private fun CreatorStageAppPickerDialog(
 
                 Button(
                     onClick = { onSave(tempSelected) },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3F51B5)),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Save Selection", fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("Save Selection (${tempSelected.size}/$maxApps)", fontWeight = FontWeight.Bold, color = Color.White)
                 }
             }
         }

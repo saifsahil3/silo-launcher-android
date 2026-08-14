@@ -56,6 +56,28 @@ import com.example.ui.components.engine.RopeVectorRenderer.drawCompletionEffect
 import com.example.ui.components.engine.RopeVectorRenderer.drawRope
 import kotlinx.coroutines.isActive
 
+private const val PREFS_NAME = "silo_prefs"
+private const val KEY_FIDGET_LEVEL = "fidget_game_level"
+
+fun getSavedFidgetLevel(context: Context): Int {
+    return try {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val level = prefs.getInt(KEY_FIDGET_LEVEL, 1)
+        if (level <= 0) 1 else level
+    } catch (e: Throwable) {
+        1
+    }
+}
+
+fun saveFidgetLevel(context: Context, level: Int) {
+    try {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putInt(KEY_FIDGET_LEVEL, if (level <= 0) 1 else level).apply()
+    } catch (e: Throwable) {
+        e.printStackTrace()
+    }
+}
+
 enum class LevelTransitionState {
     PLAYING,
     TRANSITION_OUT,
@@ -66,7 +88,7 @@ enum class LevelTransitionState {
 fun RopeFidgetWidget(modifier: Modifier = Modifier) {
     val context = LocalContext.current
 
-    var currentLevelId by remember { mutableIntStateOf(1) }
+    var currentLevelId by remember { mutableIntStateOf(getSavedFidgetLevel(context)) }
     val currentLevel = remember(currentLevelId) { LevelGenerator.getLevel(currentLevelId) }
 
     val physicsEngine = remember { RopePhysicsEngine() }
@@ -113,9 +135,11 @@ fun RopeFidgetWidget(modifier: Modifier = Modifier) {
                             physicsEngine.levelAlpha = 1.0f - progress
 
                             if (progress >= 1.0f) {
-                                // Switch to next level
-                                currentLevelId++
-                                val nextLevel = LevelGenerator.getLevel(currentLevelId)
+                                // Switch to next level and preserve progress
+                                val nextLevelId = currentLevelId + 1
+                                currentLevelId = nextLevelId
+                                saveFidgetLevel(context, nextLevelId)
+                                val nextLevel = LevelGenerator.getLevel(nextLevelId)
                                 physicsEngine.loadLevel(
                                     level = nextLevel,
                                     startX = 40f,
@@ -244,12 +268,17 @@ fun RopeFidgetWidget(modifier: Modifier = Modifier) {
                     letterSpacing = 1.5.sp
                 )
 
-                // Subtle Restart Button
+                // Subtle Reset Button (Resets back to Level 1)
                 IconButton(
                     onClick = {
                         triggerHaptic(context, isThud = false)
+                        currentLevelId = 1
+                        saveFidgetLevel(context, 1)
+                        transitionState = LevelTransitionState.PLAYING
+                        physicsEngine.levelAlpha = 1.0f
+                        val level1 = LevelGenerator.getLevel(1)
                         physicsEngine.loadLevel(
-                            level = currentLevel,
+                            level = level1,
                             startX = 40f,
                             startY = 100f,
                             availableWidth = 800f
@@ -259,7 +288,7 @@ fun RopeFidgetWidget(modifier: Modifier = Modifier) {
                 ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
-                        contentDescription = "Restart Level",
+                        contentDescription = "Reset to Level 1",
                         tint = Color.White.copy(alpha = 0.35f),
                         modifier = Modifier.size(13.dp)
                     )

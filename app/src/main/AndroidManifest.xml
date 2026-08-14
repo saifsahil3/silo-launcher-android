@@ -37,29 +37,30 @@
         <activity
             android:name="com.example.MainActivity"
             android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round"
             android:label="@string/app_name"
             android:launchMode="singleTask"
             android:stateNotNeeded="true"
             android:theme="@style/Theme.MyApplication">
 
-            <!-- System Launcher Intent Filter -->
+            <!-- System Home Launcher Intent Filter -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.HOME" />
                 <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+
+            <!-- Application Launcher Intent Filter (for App Drawer & Homescreen shortcuts on Stock Launchers) -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
         <receiver
             android:name="com.example.service.TriggerBroadcastReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
-                <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
-            </intent-filter>
-        </receiver>
+            android:exported="false" />
 
         <!-- Quick Settings Tile for Silo Focus Mode -->
         <service

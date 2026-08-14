@@ -3,6 +3,9 @@ package com.example.ui.screens
 import android.content.Intent
 import android.net.Uri
 import android.view.KeyEvent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.DirectionsCar
@@ -40,6 +44,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,12 +53,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.AppInfo
 import com.example.ui.DriveStats
 import com.example.ui.LauncherViewModel
+import com.example.util.toImageBitmapSafe
 
 @Composable
 fun DriveModeScreen(
@@ -64,6 +71,28 @@ fun DriveModeScreen(
 ) {
     val context = LocalContext.current
     val isMediaPlaying = remember(context) { viewModel.isMediaActive(context) }
+
+    // Request location permissions for GPS Speedometer
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        if (results.values.any { it }) {
+            viewModel.startSpeedTracking()
+        }
+    }
+
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        locationPermissionLauncher.launch(
+            arrayOf(
+                android.Manifest.permission.ACCESS_FINE_LOCATION,
+                android.Manifest.permission.ACCESS_COARSE_LOCATION
+            )
+        )
+        viewModel.startSpeedTracking()
+        onDispose {
+            viewModel.stopSpeedTracking()
+        }
+    }
 
     // Filter media & music applications from installed apps list
     val mediaApps = remember(allApps) {
@@ -86,12 +115,15 @@ fun DriveModeScreen(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Drive Banner / Speedometer Telemetry Card
+        // Drive Banner / Speedometer Telemetry Card (Clickable to simulate speed for testing)
         Card(
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = Color(0xFF181B24)),
             border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF282D3C)),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { viewModel.toggleSpeedSimulation() }
+                .testTag("speedometer_card")
         ) {
             Row(
                 modifier = Modifier
@@ -119,8 +151,8 @@ fun DriveModeScreen(
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = if (driveStats.connectedBluetoothDevice != null) "Connected: ${driveStats.connectedBluetoothDevice}" else "Eyes on the Road - High Contrast Interface",
-                        fontSize = 12.sp,
+                        text = if (driveStats.connectedBluetoothDevice != null) "Connected: ${driveStats.connectedBluetoothDevice}" else "GPS Active • Tap to test speed simulation",
+                        fontSize = 11.sp,
                         color = Color.White.copy(alpha = 0.6f)
                     )
                 }
@@ -130,7 +162,7 @@ fun DriveModeScreen(
                     Icon(
                         imageVector = Icons.Default.Speed,
                         contentDescription = "Speedometer",
-                        tint = Color.White.copy(alpha = 0.9f),
+                        tint = if (driveStats.currentSpeedMph > 0) Color(0xFFFF9800) else Color.White.copy(alpha = 0.9f),
                         modifier = Modifier.size(28.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -417,11 +449,11 @@ fun DriveModeScreen(
             }
         }
 
-        // Installed Music / Media Apps Grid Section
+        // Minimal & Modern Media Apps Grid Section displaying actual app icons
         if (mediaApps.isNotEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    text = "MUSIC & MEDIA APPS",
+                    text = "QUICK MEDIA ACCESS",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFFA78BFA),
@@ -429,56 +461,22 @@ fun DriveModeScreen(
                     modifier = Modifier.padding(start = 4.dp)
                 )
 
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    mediaApps.chunked(2).forEach { rowApps ->
+                // Render apps as modern icon tiles in 4-column grid layout
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    mediaApps.chunked(4).forEach { rowApps ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             rowApps.forEach { app ->
-                                Surface(
-                                    shape = RoundedCornerShape(18.dp),
-                                    color = Color(0xFF181B24),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF282D3C)),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(68.dp)
-                                        .clip(RoundedCornerShape(18.dp))
-                                        .clickable { viewModel.launchApp(context, app) }
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(horizontal = 14.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Surface(
-                                            shape = RoundedCornerShape(12.dp),
-                                            color = Color(0xFF262A38),
-                                            modifier = Modifier.size(40.dp)
-                                        ) {
-                                            Box(contentAlignment = Alignment.Center) {
-                                                Icon(
-                                                    imageVector = Icons.Default.MusicNote,
-                                                    contentDescription = null,
-                                                    tint = Color(0xFFA78BFA),
-                                                    modifier = Modifier.size(22.dp)
-                                                )
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Text(
-                                            text = app.label,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                }
+                                DriveAppIconCard(
+                                    appInfo = app,
+                                    onClick = { viewModel.launchApp(context, app) },
+                                    modifier = Modifier.weight(1f)
+                                )
                             }
-                            if (rowApps.size == 1) {
+                            // Fill remaining space if less than 4 apps in last row
+                            repeat(4 - rowApps.size) {
                                 Spacer(modifier = Modifier.weight(1f))
                             }
                         }
@@ -488,3 +486,66 @@ fun DriveModeScreen(
         }
     }
 }
+
+@Composable
+private fun DriveAppIconCard(
+    appInfo: AppInfo,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val imageBitmap = remember(appInfo) {
+        appInfo.iconDrawable?.toImageBitmapSafe() ?: try {
+            context.packageManager.getApplicationIcon(appInfo.packageName).toImageBitmapSafe()
+        } catch (e: Throwable) {
+            null
+        }
+    }
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color(0xFF181B24))
+            .border(1.dp, Color(0xFF282D3C), RoundedCornerShape(18.dp))
+            .clickable { onClick() }
+            .padding(vertical = 12.dp, horizontal = 6.dp)
+            .testTag("drive_app_icon_${appInfo.packageName}")
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(52.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color(0xFF242836))
+        ) {
+            if (imageBitmap != null) {
+                Image(
+                    bitmap = imageBitmap,
+                    contentDescription = appInfo.label,
+                    modifier = Modifier.size(36.dp)
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Apps,
+                    contentDescription = appInfo.label,
+                    tint = Color(0xFFA78BFA),
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = appInfo.label,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+

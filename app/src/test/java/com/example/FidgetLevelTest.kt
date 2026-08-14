@@ -1,10 +1,19 @@
 package com.example
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import com.example.ui.components.FidgetLevel
+import com.example.ui.components.getSavedFidgetLevel
+import com.example.ui.components.saveFidgetLevel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class FidgetLevelTest {
 
     @Test
@@ -46,5 +55,25 @@ class FidgetLevelTest {
         val level15 = FidgetLevel.getEngineLevel(15)
         assertEquals(15, level15.id)
         assertEquals("Small Sweater", level15.objectType.displayName)
+    }
+
+    @Test
+    fun testFidgetLevelPersistenceAndReset() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+
+        // Default should be Level 1
+        assertEquals(1, getSavedFidgetLevel(context))
+
+        // Progress to Level 2 and save
+        saveFidgetLevel(context, 2)
+        assertEquals(2, getSavedFidgetLevel(context))
+
+        // Progress further to Level 5 and preserve
+        saveFidgetLevel(context, 5)
+        assertEquals(5, getSavedFidgetLevel(context))
+
+        // Reset should reset back to Level 1
+        saveFidgetLevel(context, 1)
+        assertEquals(1, getSavedFidgetLevel(context))
     }
 }

@@ -23,8 +23,9 @@ class CreatorModeTest {
         assertFalse(state.isActive)
         assertEquals("shoot", state.currentStageId)
         assertEquals(3600, state.secondsRemaining)
-        assertFalse(state.isPaused)
+        assertTrue(state.isPaused)
         assertFalse(state.showResumePrompt)
+        assertFalse(state.hasTimerBeenStarted)
 
         val activeState = CreatorSessionState(
             isActive = true,
