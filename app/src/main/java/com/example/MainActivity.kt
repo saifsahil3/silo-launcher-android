@@ -90,34 +90,51 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        PassThroughManager.setPassThroughActive(this, false)
-
         setContent {
             MyApplicationTheme {
                 SiloLauncherApp(viewModel = viewModel)
             }
         }
+        handlePassThroughNavigation(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        PassThroughManager.setPassThroughActive(this, false)
+        handlePassThroughNavigation(intent)
     }
 
     override fun onResume() {
         super.onResume()
-        PassThroughManager.setPassThroughActive(this, false)
-        if (viewModel.currentMode.value == LauncherMode.PASS_THROUGH) {
-            viewModel.setMode(LauncherMode.FOCUS)
-        }
+        handlePassThroughNavigation(intent)
     }
 
-    private fun handlePassThroughIntent(intent: Intent?) {
-        PassThroughManager.setPassThroughActive(this, false)
-        PassThroughOverlayService.stopService(this)
-        viewModel.setMode(LauncherMode.FOCUS)
-        intent?.removeExtra("EXIT_PASSTHROUGH")
+    private fun handlePassThroughNavigation(currentIntent: Intent? = intent) {
+        val isActive = PassThroughManager.isPassThroughActive(this)
+        val enablePassThrough = viewModel.settings.value.enablePassThroughMode
+
+        if (isActive && enablePassThrough) {
+            val exitExtra = currentIntent?.getBooleanExtra("EXIT_PASSTHROUGH", false) == true
+            val isAppIconClick = currentIntent?.hasCategory(Intent.CATEGORY_LAUNCHER) == true &&
+                    currentIntent.hasCategory(Intent.CATEGORY_HOME) != true
+
+            if (exitExtra || isAppIconClick) {
+                PassThroughManager.setPassThroughActive(this, false)
+                PassThroughOverlayService.stopService(this)
+                viewModel.setMode(LauncherMode.FOCUS)
+                currentIntent?.removeExtra("EXIT_PASSTHROUGH")
+            } else {
+                val launched = PassThroughManager.launchPassThroughLauncher(this)
+                if (!launched) {
+                    PassThroughManager.setPassThroughActive(this, false)
+                    viewModel.setMode(LauncherMode.FOCUS)
+                }
+            }
+        } else {
+            if (viewModel.currentMode.value == LauncherMode.PASS_THROUGH) {
+                viewModel.setMode(LauncherMode.FOCUS)
+            }
+        }
     }
 }
 @Composable

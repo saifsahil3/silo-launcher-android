@@ -129,6 +129,13 @@ object PassThroughManager {
         prefs.edit().putBoolean(KEY_PASSTHROUGH_ACTIVE, active).apply()
     }
 
+    fun isPureHomeIntent(intent: Intent?): Boolean {
+        if (intent == null) return false
+        val hasHome = intent.hasCategory(Intent.CATEGORY_HOME)
+        val hasLauncher = intent.hasCategory(Intent.CATEGORY_LAUNCHER)
+        return hasHome && !hasLauncher
+    }
+
     fun launchPassThroughLauncher(context: Context, packageName: String? = null): Boolean {
         val targetPkg = packageName ?: getSavedPassThroughLauncher(context) ?: return false
         val pm = context.packageManager

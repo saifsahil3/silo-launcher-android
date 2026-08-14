@@ -19,6 +19,10 @@ import com.example.db.LauncherDatabase
 import com.example.db.ModeSettingEntity
 import com.example.db.CreatorStageConfigEntity
 import com.example.model.LauncherMode
+import com.example.model.FocusWidgetData
+import com.example.model.focusWidgetsFromJson
+import com.example.model.focusWidgetsToJson
+import com.example.model.getDefaultFocusWidgets
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,8 +51,9 @@ data class CreatorSessionState(
     val isActive: Boolean = false,
     val currentStageId: String = "shoot",
     val secondsRemaining: Int = 3600,
-    val isPaused: Boolean = false,
-    val showResumePrompt: Boolean = false
+    val isPaused: Boolean = true,
+    val showResumePrompt: Boolean = false,
+    val hasTimerBeenStarted: Boolean = false
 )
 
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
@@ -78,6 +83,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     // Focus Mode
     private val _focusAllowedPackages = MutableStateFlow<List<String>>(emptyList())
     val focusAllowedPackages: StateFlow<List<String>> = _focusAllowedPackages.asStateFlow()
+
+    private val _focusWidgets = MutableStateFlow<List<FocusWidgetData>>(getDefaultFocusWidgets())
+    val focusWidgets: StateFlow<List<FocusWidgetData>> = _focusWidgets.asStateFlow()
 
     private val _focusGoal = MutableStateFlow("Deep Work & Zero Distractions")
     val focusGoal: StateFlow<String> = _focusGoal.asStateFlow()
@@ -137,20 +145,23 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                     _creatorSessionState.value = _creatorSessionState.value.copy(isPaused = true)
                 }
                 Intent.ACTION_USER_PRESENT -> {
-                    val now = System.currentTimeMillis()
-                    if (lastScreenOffTime > 0) {
-                        val durationLockedMinutes = (now - lastScreenOffTime) / 1000 / 60
-                        if (durationLockedMinutes >= 30) {
-                            finishCreatorSession()
+                    // Only show resume prompt if timer was actually started by user
+                    if (session.hasTimerBeenStarted) {
+                        val now = System.currentTimeMillis()
+                        if (lastScreenOffTime > 0) {
+                            val durationLockedMinutes = (now - lastScreenOffTime) / 1000 / 60
+                            if (durationLockedMinutes >= 30) {
+                                finishCreatorSession()
+                            } else {
+                                _creatorSessionState.value = _creatorSessionState.value.copy(
+                                    showResumePrompt = true
+                                )
+                            }
                         } else {
                             _creatorSessionState.value = _creatorSessionState.value.copy(
                                 showResumePrompt = true
                             )
                         }
-                    } else {
-                        _creatorSessionState.value = _creatorSessionState.value.copy(
-                            showResumePrompt = true
-                        )
                     }
                 }
             }
@@ -212,6 +223,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                     _focusAllowedPackages.value = current.focusAllowedPackages.split(",")
                         .map { it.trim() }
                         .filter { it.isNotEmpty() }
+
+                    _focusWidgets.value = focusWidgetsFromJson(current.focusWidgetsJson)
 
                     _driveFavoritePackages.value = current.driveFavoritePackages.split(",")
                         .map { it.trim() }
@@ -283,6 +296,43 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         saveFocusPackagesToDb(newOrder)
     }
 
+    fun updateFocusWidgets(newList: List<FocusWidgetData>) {
+        _focusWidgets.value = newList
+        saveFocusWidgetsToDb(newList)
+    }
+
+    fun addFocusWidget(widget: FocusWidgetData) {
+        val updated = _focusWidgets.value.toMutableList().apply { add(widget) }
+        _focusWidgets.value = updated
+        saveFocusWidgetsToDb(updated)
+    }
+
+    fun removeFocusWidgetAt(index: Int) {
+        val current = _focusWidgets.value.toMutableList()
+        if (index in current.indices) {
+            current.removeAt(index)
+            _focusWidgets.value = current
+            saveFocusWidgetsToDb(current)
+        }
+    }
+
+    fun updateFocusWidgetAt(index: Int, updatedWidget: FocusWidgetData) {
+        val current = _focusWidgets.value.toMutableList()
+        if (index in current.indices) {
+            current[index] = updatedWidget
+            _focusWidgets.value = current
+            saveFocusWidgetsToDb(current)
+        }
+    }
+
+    private fun saveFocusWidgetsToDb(widgets: List<FocusWidgetData>) {
+        viewModelScope.launch {
+            val json = focusWidgetsToJson(widgets)
+            val updated = _settings.value.copy(focusWidgetsJson = json)
+            dao.saveSettings(updated)
+        }
+    }
+
     private fun saveFocusPackagesToDb(packages: List<String>) {
         viewModelScope.launch {
             val stringVal = packages.joinToString(",")
@@ -304,6 +354,91 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             val updated = _settings.value.copy(driveFavoritePackages = current.joinToString(","))
             dao.saveSettings(updated)
+        }
+    }
+
+    private var locationManager: android.location.LocationManager? = null
+    private var locationListener: android.location.LocationListener? = null
+    private var isSimulatingSpeed = false
+
+    fun startSpeedTracking() {
+        try {
+            val app = getApplication<Application>()
+            if (androidx.core.content.ContextCompat.checkSelfPermission(app, android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED ||
+                androidx.core.content.ContextCompat.checkSelfPermission(app, android.Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                if (locationManager == null) {
+                    locationManager = app.getSystemService(Context.LOCATION_SERVICE) as? android.location.LocationManager
+                }
+                if (locationListener == null) {
+                    var lastLoc: android.location.Location? = null
+                    var lastLocTime: Long = 0L
+                    locationListener = object : android.location.LocationListener {
+                        override fun onLocationChanged(location: android.location.Location) {
+                            if (isSimulatingSpeed) return
+                            var speedMph = 0
+                            if (location.hasSpeed() && location.speed > 0f) {
+                                speedMph = (location.speed * 2.23694f).toInt()
+                            } else if (lastLoc != null) {
+                                val timeDiffSec = (location.time - lastLocTime) / 1000f
+                                if (timeDiffSec > 0.5f) {
+                                    val distMeters = lastLoc!!.distanceTo(location)
+                                    val speedMps = distMeters / timeDiffSec
+                                    speedMph = (speedMps * 2.23694f).toInt()
+                                }
+                            }
+                            lastLoc = location
+                            lastLocTime = location.time
+                            _driveStats.value = _driveStats.value.copy(
+                                currentSpeedMph = speedMph,
+                                isDrivingDetected = speedMph > 5
+                            )
+                        }
+                        @Deprecated("Deprecated in Java")
+                        override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) {}
+                        override fun onProviderEnabled(provider: String) {}
+                        override fun onProviderDisabled(provider: String) {}
+                    }
+                }
+                locationListener?.let { listener ->
+                    locationManager?.requestLocationUpdates(android.location.LocationManager.GPS_PROVIDER, 1000L, 0.5f, listener)
+                    locationManager?.requestLocationUpdates(android.location.LocationManager.NETWORK_PROVIDER, 2000L, 1.0f, listener)
+                }
+            }
+        } catch (e: Throwable) {
+            e.printStackTrace()
+        }
+    }
+
+    fun stopSpeedTracking() {
+        try {
+            locationListener?.let { listener ->
+                locationManager?.removeUpdates(listener)
+            }
+            locationListener = null
+            _driveStats.value = _driveStats.value.copy(currentSpeedMph = 0, isDrivingDetected = false)
+        } catch (e: Throwable) {
+            e.printStackTrace()
+        }
+    }
+
+    fun toggleSpeedSimulation() {
+        isSimulatingSpeed = !isSimulatingSpeed
+        if (isSimulatingSpeed) {
+            val current = _driveStats.value.currentSpeedMph
+            val nextSpeed = when {
+                current < 25 -> 25
+                current < 45 -> 45
+                current < 65 -> 65
+                else -> 0
+            }
+            _driveStats.value = _driveStats.value.copy(
+                currentSpeedMph = nextSpeed,
+                isDrivingDetected = nextSpeed > 5
+            )
+        } else {
+            _driveStats.value = _driveStats.value.copy(currentSpeedMph = 0, isDrivingDetected = false)
+            startSpeedTracking()
         }
     }
 
@@ -650,7 +785,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun resumeCreatorSession() {
         _creatorSessionState.value = _creatorSessionState.value.copy(
             isPaused = false,
-            showResumePrompt = false
+            showResumePrompt = false,
+            hasTimerBeenStarted = true
         )
     }
 
@@ -660,7 +796,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         _creatorSessionState.value = current.copy(
             secondsRemaining = newSeconds,
             isPaused = false,
-            showResumePrompt = false
+            showResumePrompt = false,
+            hasTimerBeenStarted = true
         )
         startTimerLoop()
     }
@@ -744,6 +881,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         } catch (e: Exception) {
             // ignore
         }
+        stopSpeedTracking()
         timerJob?.cancel()
     }
 

@@ -19,4 +19,19 @@ class LauncherModeTest {
     fun testLauncherModeCount() {
         assertEquals(7, LauncherMode.values().size)
     }
+
+    @Test
+    fun testLauncherModeExactOrder() {
+        val expectedOrder = listOf(
+            LauncherMode.FOCUS,
+            LauncherMode.E_PAPER,
+            LauncherMode.CREATOR,
+            LauncherMode.DRIVE,
+            LauncherMode.SLEEP,
+            LauncherMode.ALL_APPS,
+            LauncherMode.PASS_THROUGH
+        )
+        val actualOrder = LauncherMode.values().toList()
+        assertEquals(expectedOrder, actualOrder)
+    }
 }

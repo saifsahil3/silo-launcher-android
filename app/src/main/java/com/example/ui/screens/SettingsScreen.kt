@@ -37,6 +37,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -104,13 +105,27 @@ fun SettingsScreen(
     }
     var currentSubPage by remember { mutableStateOf(SettingsSubPage.MAIN) }
 
-    // High contrast switch colors for clear visibility on dark background
+    val versionName = remember(context) {
+        try {
+            val pInfo = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+            } else {
+                @Suppress("DEPRECATION")
+                context.packageManager.getPackageInfo(context.packageName, 0)
+            }
+            pInfo.versionName ?: "1.0"
+        } catch (e: Exception) {
+            "1.0"
+        }
+    }
+
+    // High contrast switch colors aligned with brand palette
     val highContrastSwitchColors = SwitchDefaults.colors(
         checkedThumbColor = Color.White,
-        checkedTrackColor = Color(0xFF7C3AED),
+        checkedTrackColor = MaterialTheme.colorScheme.primary,
         uncheckedThumbColor = Color(0xFF94A3B8),
-        uncheckedTrackColor = Color(0xFF262933),
-        uncheckedBorderColor = Color(0xFF475569)
+        uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+        uncheckedBorderColor = MaterialTheme.colorScheme.outline
     )
 
     Scaffold(
@@ -883,7 +898,7 @@ fun SettingsScreen(
                                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
                                         shape = RoundedCornerShape(10.dp)
                                     ) {
-                                        Text("Primary Apps", fontSize = 11.sp)
+                                        Text("Primary Apps (Max 3)", fontSize = 11.sp)
                                     }
 
                                     OutlinedButton(
@@ -893,7 +908,7 @@ fun SettingsScreen(
                                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
                                         shape = RoundedCornerShape(10.dp)
                                     ) {
-                                        Text("Support Apps", fontSize = 11.sp)
+                                        Text("Support Apps (Max 4)", fontSize = 11.sp)
                                     }
 
                                     // Primary Apps Picker Dialog
@@ -903,6 +918,7 @@ fun SettingsScreen(
                                             title = "Select Primary Apps ($stageDisplayTitle)",
                                             allApps = allApps,
                                             selectedPackages = config.primaryApps.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet(),
+                                            maxApps = 3,
                                             onDismiss = { showPrimaryPicker = false },
                                             onSave = { selected ->
                                                 val support = config.supportApps.split(",").map { it.trim() }.filter { it.isNotEmpty() }
@@ -919,6 +935,7 @@ fun SettingsScreen(
                                             title = "Select Support Apps ($stageDisplayTitle)",
                                             allApps = allApps,
                                             selectedPackages = config.supportApps.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet(),
+                                            maxApps = 4,
                                             onDismiss = { showSupportPicker = false },
                                             onSave = { selected ->
                                                 val primary = config.primaryApps.split(",").map { it.trim() }.filter { it.isNotEmpty() }
@@ -961,19 +978,14 @@ fun SettingsScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 10.dp),
+                    .padding(vertical = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Silo Launcher v1.0",
+                    text = "Silo Launcher v$versionName",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White.copy(alpha = 0.7f)
-                )
-                Text(
-                    text = "Built with Jetpack Compose & Clean Architecture",
-                    fontSize = 11.sp,
-                    color = Color(0xFF6B7280)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
             }
 
@@ -1067,10 +1079,15 @@ private fun CreatorStageAppPickerDialog(
     title: String,
     allApps: List<com.example.data.AppInfo>,
     selectedPackages: Set<String>,
+    maxApps: Int,
     onDismiss: () -> Unit,
     onSave: (Set<String>) -> Unit
 ) {
-    var tempSelected by remember { mutableStateOf(selectedPackages) }
+    var tempSelected by remember(selectedPackages, allApps) {
+        mutableStateOf(selectedPackages.filter { pkg -> allApps.any { it.packageName == pkg } }.toSet())
+    }
+
+    val isMaxReached = tempSelected.size >= maxApps
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -1091,12 +1108,19 @@ private fun CreatorStageAppPickerDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = title,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
+                    Column {
+                        Text(
+                            text = title,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "${tempSelected.size} / $maxApps app(s) selected",
+                            fontSize = 12.sp,
+                            color = if (isMaxReached) Color(0xFFFFB74D) else Color.White.copy(alpha = 0.5f)
+                        )
+                    }
                     IconButton(onClick = onDismiss) {
                         Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = Color.White)
                     }
@@ -1112,15 +1136,16 @@ private fun CreatorStageAppPickerDialog(
                 ) {
                     items(allApps) { appInfo ->
                         val isChecked = tempSelected.contains(appInfo.packageName)
+                        val isDisabled = isMaxReached && !isChecked
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(10.dp))
-                                .clickable {
+                                .clickable(enabled = !isDisabled) {
                                     val current = tempSelected.toMutableSet()
-                                    if (current.contains(appInfo.packageName)) {
+                                    if (isChecked) {
                                         current.remove(appInfo.packageName)
-                                    } else {
+                                    } else if (current.size < maxApps) {
                                         current.add(appInfo.packageName)
                                     }
                                     tempSelected = current
@@ -1133,11 +1158,12 @@ private fun CreatorStageAppPickerDialog(
                                 text = appInfo.label,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = Color.White
+                                color = if (isDisabled) Color.White.copy(alpha = 0.3f) else Color.White
                             )
                             Checkbox(
                                 checked = isChecked,
-                                onCheckedChange = null
+                                onCheckedChange = null,
+                                enabled = !isDisabled
                             )
                         }
                     }
@@ -1147,10 +1173,10 @@ private fun CreatorStageAppPickerDialog(
 
                 Button(
                     onClick = { onSave(tempSelected) },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3F51B5)),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Save Selection", fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("Save Selection (${tempSelected.size}/$maxApps)", fontWeight = FontWeight.Bold, color = Color.White)
                 }
             }
         }
