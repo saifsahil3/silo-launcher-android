@@ -187,7 +187,7 @@ fun StockWidgetResizeFrame(
             // Widget Card Container with Bounding Box & Handles
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(curWidth.coerceIn(0.35f, 1.0f))
+                    .fillMaxWidth(if (isSelected) (curWidth * 0.94f).coerceIn(0.35f, 0.94f) else curWidth.coerceIn(0.35f, 1.0f))
                     .height(curHeight.dp)
                     .then(
                         if (isSelected) {
@@ -209,28 +209,32 @@ fun StockWidgetResizeFrame(
                 // Actual Widget Content
                 content()
 
-                // Touch shield overlay when selected (blocks child views from consuming drag/tap)
+                // Touch shield overlay when selected (blocks child views from consuming drag/tap and prevents app launching)
                 if (isSelected && !isDragging) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .zIndex(5f)
+                            .zIndex(10f)
+                            .pointerInput(Unit) {
+                                awaitEachGesture {
+                                    val down = awaitFirstDown()
+                                    down.consume()
+                                    waitForUpOrCancellation()?.consume()
+                                }
+                            }
                     )
                 }
 
                 // 4-Directional Stock Resize Handles (Visible when selected)
                 if (isSelected && !isDragging) {
-                    // Top Handle (Horizontal Pill)
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFF6366F1),
-                        shadowElevation = 6.dp,
+                    // Top Handle (Expanded Touch Hitbox)
+                    Box(
+                        contentAlignment = Alignment.Center,
                         modifier = Modifier
                             .align(Alignment.TopCenter)
-                            .offset(y = (-10).dp)
-                            .size(width = 38.dp, height = 14.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .zIndex(15f)
+                            .offset(y = (-14).dp)
+                            .size(width = 64.dp, height = 44.dp)
+                            .zIndex(25f)
                             .pointerInput(widgetId) {
                                 detectDragGestures(
                                     onDragEnd = { onHeightDpChange(curHeight) }
@@ -245,26 +249,32 @@ fun StockWidgetResizeFrame(
                                 }
                             }
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Box(
-                                modifier = Modifier
-                                    .size(width = 16.dp, height = 2.dp)
-                                    .background(Color.White.copy(alpha = 0.8f), RoundedCornerShape(1.dp))
-                            )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF6366F1),
+                            shadowElevation = 6.dp,
+                            modifier = Modifier
+                                .size(width = 38.dp, height = 14.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(width = 16.dp, height = 2.dp)
+                                        .background(Color.White.copy(alpha = 0.8f), RoundedCornerShape(1.dp))
+                                )
+                            }
                         }
                     }
 
-                    // Bottom Handle (Horizontal Pill)
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFF6366F1),
-                        shadowElevation = 6.dp,
+                    // Bottom Handle (Expanded Touch Hitbox)
+                    Box(
+                        contentAlignment = Alignment.Center,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .offset(y = 10.dp)
-                            .size(width = 38.dp, height = 14.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .zIndex(15f)
+                            .offset(y = 14.dp)
+                            .size(width = 64.dp, height = 44.dp)
+                            .zIndex(25f)
                             .pointerInput(widgetId) {
                                 detectDragGestures(
                                     onDragEnd = { onHeightDpChange(curHeight) }
@@ -279,26 +289,32 @@ fun StockWidgetResizeFrame(
                                 }
                             }
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Box(
-                                modifier = Modifier
-                                    .size(width = 16.dp, height = 2.dp)
-                                    .background(Color.White.copy(alpha = 0.8f), RoundedCornerShape(1.dp))
-                            )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF6366F1),
+                            shadowElevation = 6.dp,
+                            modifier = Modifier
+                                .size(width = 38.dp, height = 14.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(width = 16.dp, height = 2.dp)
+                                        .background(Color.White.copy(alpha = 0.8f), RoundedCornerShape(1.dp))
+                                )
+                            }
                         }
                     }
 
-                    // Left Handle (Vertical Pill)
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFF6366F1),
-                        shadowElevation = 6.dp,
+                    // Left Handle (Expanded Touch Hitbox)
+                    Box(
+                        contentAlignment = Alignment.Center,
                         modifier = Modifier
                             .align(Alignment.CenterStart)
-                            .offset(x = (-10).dp)
-                            .size(width = 14.dp, height = 38.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .zIndex(15f)
+                            .offset(x = (-14).dp)
+                            .size(width = 48.dp, height = 64.dp)
+                            .zIndex(25f)
                             .pointerInput(widgetId) {
                                 detectDragGestures(
                                     onDragEnd = { onWidthFractionChange(curWidth) }
@@ -313,26 +329,32 @@ fun StockWidgetResizeFrame(
                                 }
                             }
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Box(
-                                modifier = Modifier
-                                    .size(width = 2.dp, height = 16.dp)
-                                    .background(Color.White.copy(alpha = 0.8f), RoundedCornerShape(1.dp))
-                            )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF6366F1),
+                            shadowElevation = 6.dp,
+                            modifier = Modifier
+                                .size(width = 14.dp, height = 38.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(width = 2.dp, height = 16.dp)
+                                        .background(Color.White.copy(alpha = 0.8f), RoundedCornerShape(1.dp))
+                                )
+                            }
                         }
                     }
 
-                    // Right Handle (Vertical Pill)
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFF6366F1),
-                        shadowElevation = 6.dp,
+                    // Right Handle (Expanded Touch Hitbox)
+                    Box(
+                        contentAlignment = Alignment.Center,
                         modifier = Modifier
                             .align(Alignment.CenterEnd)
-                            .offset(x = 10.dp)
-                            .size(width = 14.dp, height = 38.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .zIndex(15f)
+                            .offset(x = 14.dp)
+                            .size(width = 48.dp, height = 64.dp)
+                            .zIndex(25f)
                             .pointerInput(widgetId) {
                                 detectDragGestures(
                                     onDragEnd = { onWidthFractionChange(curWidth) }
@@ -347,12 +369,21 @@ fun StockWidgetResizeFrame(
                                 }
                             }
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Box(
-                                modifier = Modifier
-                                    .size(width = 2.dp, height = 16.dp)
-                                    .background(Color.White.copy(alpha = 0.8f), RoundedCornerShape(1.dp))
-                            )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF6366F1),
+                            shadowElevation = 6.dp,
+                            modifier = Modifier
+                                .size(width = 14.dp, height = 38.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(width = 2.dp, height = 16.dp)
+                                        .background(Color.White.copy(alpha = 0.8f), RoundedCornerShape(1.dp))
+                                )
+                            }
                         }
                     }
 
