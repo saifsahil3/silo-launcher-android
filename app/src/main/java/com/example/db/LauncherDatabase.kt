@@ -80,12 +80,14 @@ interface ModeSettingDao {
     entities = [
         ModeSettingEntity::class,
         PinnedAppEntity::class,
-        CreatorStageConfigEntity::class
+        CreatorStageConfigEntity::class,
+        OfflineBookEntity::class
     ],
-    version = 4,
+    version = 6,
     exportSchema = false
 )
 abstract class LauncherDatabase : RoomDatabase() {
     abstract fun modeSettingDao(): ModeSettingDao
+    abstract fun offlineBookDao(): OfflineBookDao
 }
 

@@ -285,7 +285,8 @@ fun SiloLauncherApp(viewModel: LauncherViewModel) {
                         )
                         LauncherMode.E_PAPER -> EPaperLayout(
                             viewModel = viewModel,
-                            allApps = allApps
+                            allApps = allApps,
+                            onOpenSettings = { showSettingsScreen = true }
                         )
                         LauncherMode.PASS_THROUGH -> PassThroughModeScreen(
                             viewModel = viewModel,

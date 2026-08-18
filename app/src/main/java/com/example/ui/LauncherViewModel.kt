@@ -7,6 +7,8 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.Uri
+import android.provider.OpenableColumns
 import android.os.BatteryManager
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
@@ -14,15 +16,20 @@ import androidx.lifecycle.viewModelScope
 import androidx.room.Room
 import com.example.data.AppInfo
 import com.example.data.AppRepository
+import com.example.data.ReadingAppDetector
 import com.example.db.DatabaseProvider
 import com.example.db.LauncherDatabase
 import com.example.db.ModeSettingEntity
 import com.example.db.CreatorStageConfigEntity
+import com.example.db.OfflineBookEntity
+import com.example.db.PinnedAppEntity
+import com.example.ui.theme.EPaperColorProfile
 import com.example.model.LauncherMode
 import com.example.model.FocusWidgetData
 import com.example.model.focusWidgetsFromJson
 import com.example.model.focusWidgetsToJson
 import com.example.model.getDefaultFocusWidgets
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,6 +37,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -118,6 +126,36 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val _settings = MutableStateFlow(ModeSettingEntity())
     val settings: StateFlow<ModeSettingEntity> = _settings.asStateFlow()
 
+    // Offline Books & Reading Progress
+    private val offlineBookDao = db.offlineBookDao()
+    private val _offlineBooks = MutableStateFlow<List<OfflineBookEntity>>(emptyList())
+    val offlineBooks: StateFlow<List<OfflineBookEntity>> = _offlineBooks.asStateFlow()
+
+    private val prefs = application.getSharedPreferences("epaper_reading_prefs", Context.MODE_PRIVATE)
+    private val _currentlyReadingBook = MutableStateFlow(prefs.getString("reading_book_title", "Atomic Habits") ?: "Atomic Habits")
+    val currentlyReadingBook: StateFlow<String> = _currentlyReadingBook.asStateFlow()
+
+    private val _currentlyReadingPage = MutableStateFlow(prefs.getInt("reading_current_page", 142))
+    val currentlyReadingPage: StateFlow<Int> = _currentlyReadingPage.asStateFlow()
+
+    private val _currentlyReadingTotalPages = MutableStateFlow(prefs.getInt("reading_total_pages", 320))
+    val currentlyReadingTotalPages: StateFlow<Int> = _currentlyReadingTotalPages.asStateFlow()
+
+    private val _epaperColorProfile = MutableStateFlow(
+        try {
+            EPaperColorProfile.valueOf(
+                prefs.getString("epaper_color_profile", EPaperColorProfile.PAPER_WHITE.name)
+                    ?: EPaperColorProfile.PAPER_WHITE.name
+            )
+        } catch (e: Throwable) {
+            EPaperColorProfile.PAPER_WHITE
+        }
+    )
+    val epaperColorProfile: StateFlow<EPaperColorProfile> = _epaperColorProfile.asStateFlow()
+
+    private val _pinnedReadingAppPackages = MutableStateFlow<List<String>>(emptyList())
+    val pinnedReadingAppPackages: StateFlow<List<String>> = _pinnedReadingAppPackages.asStateFlow()
+
     // Pass-Through Banner visibility
     private val _showPassThroughBanner = MutableStateFlow(false)
     val showPassThroughBanner: StateFlow<Boolean> = _showPassThroughBanner.asStateFlow()
@@ -173,6 +211,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         loadInstalledApps()
         loadSettingsFromDb()
         loadCreatorStageConfigs()
+        loadOfflineBooks()
+        loadPinnedReadingApps()
         registerBatteryReceiver()
 
         // Register internal trigger receiver safely
@@ -525,10 +565,35 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             val intent = context.packageManager.getLaunchIntentForPackage(packageName)
             if (intent != null) {
                 context.startActivity(intent)
+            } else {
+                openPlayStore(context, packageName)
             }
         } catch (e: Exception) {
             e.printStackTrace()
+            openPlayStore(context, packageName)
         }
+    }
+
+    fun openPlayStore(context: Context, packageName: String) {
+        try {
+            val marketIntent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName")).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(marketIntent)
+        } catch (e: Exception) {
+            try {
+                val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$packageName")).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(webIntent)
+            } catch (ex: Exception) {
+                ex.printStackTrace()
+            }
+        }
+    }
+
+    fun launchOrInstallGoogleNews(context: Context) {
+        launchPackageName(context, ReadingAppDetector.GOOGLE_NEWS_PACKAGE)
     }
 
     fun isDefaultLauncher(context: Context): Boolean {
@@ -852,6 +917,258 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 e.printStackTrace()
             }
         }
+    }
+
+    // -------------------------------------------------------------
+    // E-Paper Sanctuary & Offline Bookshelf Architecture
+    // -------------------------------------------------------------
+
+    fun cycleEPaperColorProfile() {
+        val next = _epaperColorProfile.value.next()
+        _epaperColorProfile.value = next
+        prefs.edit().putString("epaper_color_profile", next.name).apply()
+    }
+
+    fun setEPaperColorProfile(profile: EPaperColorProfile) {
+        _epaperColorProfile.value = profile
+        prefs.edit().putString("epaper_color_profile", profile.name).apply()
+    }
+
+    private fun loadPinnedReadingApps() {
+        viewModelScope.launch {
+            try {
+                dao.getPinnedAppsForMode(LauncherMode.E_PAPER.name).collectLatest { list ->
+                    _pinnedReadingAppPackages.value = list.map { it.packageName }
+                }
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun pinReadingApp(packageName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val current = _pinnedReadingAppPackages.value
+                if (!current.contains(packageName)) {
+                    dao.insertPinnedApp(
+                        PinnedAppEntity(
+                            packageName = packageName,
+                            modeName = LauncherMode.E_PAPER.name,
+                            displayOrder = current.size
+                        )
+                    )
+                }
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun unpinReadingApp(packageName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                dao.deletePinnedApp(packageName, LauncherMode.E_PAPER.name)
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private fun loadOfflineBooks() {
+        viewModelScope.launch {
+            try {
+                offlineBookDao.getAllOfflineBooksFlow().collectLatest { list ->
+                    _offlineBooks.value = list
+                }
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun addOfflineBook(context: Context, uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                try {
+                    context.contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                } catch (e: Throwable) {
+                    // ignore if not persistable
+                }
+
+                var rawTitle = "Offline Document"
+                val mimeType = context.contentResolver.getType(uri) ?: "application/pdf"
+
+                try {
+                    context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                        val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (nameIndex != -1 && cursor.moveToFirst()) {
+                            val name = cursor.getString(nameIndex)
+                            if (!name.isNullOrBlank()) {
+                                rawTitle = name
+                            }
+                        }
+                    }
+                } catch (e: Throwable) {
+                    e.printStackTrace()
+                }
+
+                val titleLower = rawTitle.lowercase(Locale.ROOT)
+                val badge = when {
+                    titleLower.endsWith(".epub") || mimeType.contains("epub") -> "EPUB"
+                    titleLower.endsWith(".mobi") || mimeType.contains("mobi") -> "MOBI"
+                    titleLower.endsWith(".cbz") || mimeType.contains("cbz") -> "CBZ"
+                    titleLower.endsWith(".pdf") || mimeType.contains("pdf") -> "PDF"
+                    titleLower.endsWith(".txt") || mimeType.contains("text") -> "TXT"
+                    else -> "DOC"
+                }
+
+                // Clean file extension from title
+                var cleanedTitle = rawTitle.replace(Regex("\\.(epub|mobi|cbz|pdf|txt|fb2)$", RegexOption.IGNORE_CASE), "")
+                var extractedAuthor = "Unknown Author"
+
+                // Extract Author if format is "Title - Author" or "Author - Title"
+                if (cleanedTitle.contains(" - ")) {
+                    val parts = cleanedTitle.split(" - ")
+                    if (parts.size >= 2) {
+                        cleanedTitle = parts[0].trim()
+                        extractedAuthor = parts[1].trim()
+                    }
+                }
+
+                val bookEntity = OfflineBookEntity(
+                    title = cleanedTitle,
+                    author = extractedAuthor,
+                    uriString = uri.toString(),
+                    mimeType = mimeType,
+                    formatBadge = badge,
+                    currentPage = 0,
+                    totalPages = 100,
+                    isCompleted = false,
+                    addedTimestamp = System.currentTimeMillis(),
+                    lastOpenedTimestamp = System.currentTimeMillis()
+                )
+                val newId = offlineBookDao.insertOfflineBook(bookEntity)
+
+                // If currently reading is default placeholder, set this newly imported book as currently reading
+                if (_currentlyReadingBook.value == "Atomic Habits" || _currentlyReadingBook.value.isBlank()) {
+                    updateReadingProgress(cleanedTitle, 0, 100)
+                }
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun deleteOfflineBook(id: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                offlineBookDao.deleteOfflineBook(id)
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun renameOfflineBook(id: Long, newTitle: String, newAuthor: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                offlineBookDao.renameBook(id, newTitle.trim(), newAuthor.trim())
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun updateOfflineBookProgress(bookId: Long, page: Int, totalPages: Int) {
+        val safeTotal = totalPages.coerceAtLeast(1)
+        val safePage = page.coerceIn(0, safeTotal)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                offlineBookDao.updateProgress(bookId, safePage, safeTotal)
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+        }
+        val book = _offlineBooks.value.find { it.id == bookId }
+        if (book != null) {
+            updateReadingProgress(book.title, safePage, safeTotal)
+        }
+    }
+
+    fun setBookPreferredPackage(bookId: Long, packageName: String?) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                offlineBookDao.setPreferredPackage(bookId, packageName)
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun toggleBookCompletion(bookId: Long, isCompleted: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                offlineBookDao.setCompletion(bookId, isCompleted)
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun openOfflineBook(context: Context, book: OfflineBookEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                offlineBookDao.updateLastOpened(book.id, System.currentTimeMillis())
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+        }
+
+        // Sync to "Now Reading"
+        updateReadingProgress(book.title, book.currentPage, book.totalPages)
+
+        try {
+            val uri = Uri.parse(book.uriString)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, book.mimeType.ifBlank { "application/pdf" })
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (!book.preferredPackage.isNullOrBlank()) {
+                    setPackage(book.preferredPackage)
+                }
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            try {
+                // Fallback without specific package/mime constraint
+                val uri = Uri.parse(book.uriString)
+                val fallbackIntent = Intent(Intent.ACTION_VIEW, uri).apply {
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(fallbackIntent)
+            } catch (ex: Exception) {
+                ex.printStackTrace()
+            }
+        }
+    }
+
+    fun updateReadingProgress(bookTitle: String, page: Int, totalPages: Int) {
+        val safeTotal = totalPages.coerceAtLeast(1)
+        val safePage = page.coerceIn(0, safeTotal)
+        _currentlyReadingBook.value = bookTitle
+        _currentlyReadingPage.value = safePage
+        _currentlyReadingTotalPages.value = safeTotal
+
+        prefs.edit()
+            .putString("reading_book_title", bookTitle)
+            .putInt("reading_current_page", safePage)
+            .putInt("reading_total_pages", safeTotal)
+            .apply()
     }
 
     fun resetCreatorConfigurations() {

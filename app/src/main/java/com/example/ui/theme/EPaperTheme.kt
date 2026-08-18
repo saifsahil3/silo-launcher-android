@@ -11,8 +11,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// Typography Engine: Custom High-Legibility Serif Typography
+// Typography Engine: Custom High-Legibility Serif & Mono Typography for E-Paper
 val EPaperFontFamily = FontFamily.Serif
+val EPaperMonoFamily = FontFamily.Monospace
 
 val EPaperTypography = Typography(
     displayLarge = TextStyle(
@@ -90,21 +91,53 @@ val EPaperTypography = Typography(
     )
 )
 
-// Day Mode (Paper White & Warm Cream)
-val PaperWhiteBackground = Color(0xFFF4F1EA)
-val PaperWhiteSurface = Color(0xFFEAE6DF)
-val PaperWhiteOnBackground = Color(0xFF111111)
-val PaperWhiteOnSurface = Color(0xFF1A1A1A)
-val PaperWhiteSecondaryText = Color(0xFF444444)
-val PaperWhiteBorder = Color(0xFFD2CFC7)
+/**
+ * E-Paper Contrast & Warmth Profiles
+ */
+enum class EPaperColorProfile(val label: String, val badgeText: String) {
+    PAPER_WHITE("Paper White (Auto)", "PAPER WHITE"),
+    WARM_AMBER("Warm Amber", "WARM AMBER"),
+    SLATE_CHARCOAL("Slate Charcoal", "SLATE CHARCOAL"),
+    HIGH_CONTRAST("1-Bit Monochrome", "HIGH CONTRAST");
 
-// Night Mode (Inverted E-Ink Warm Amber / Low Blue Light)
-val AmberNightBackground = Color(0xFF050505)
-val AmberNightSurface = Color(0xFF181818)
-val AmberNightOnBackground = Color(0xFFD4A373)
-val AmberNightOnSurface = Color(0xFFE2B282)
-val AmberNightSecondaryText = Color(0xFFA08060)
-val AmberNightBorder = Color(0xFF332A20)
+    fun next(): EPaperColorProfile {
+        val entries = entries
+        val nextIndex = (ordinal + 1) % entries.size
+        return entries[nextIndex]
+    }
+}
+
+// 1. Paper White (Day Warm Cream & Rich Charcoal Ink)
+val PaperWhiteBackground = Color(0xFFF5F2EB)
+val PaperWhiteSurface = Color(0xFFEBE6DC)
+val PaperWhiteOnBackground = Color(0xFF141414)
+val PaperWhiteOnSurface = Color(0xFF1F1F1F)
+val PaperWhiteSecondaryText = Color(0xFF4A4A4A)
+val PaperWhiteBorder = Color(0xFFD5D0C5)
+
+// 2. Warm Amber (Night Inverted Low-Blue-Light)
+val AmberNightBackground = Color(0xFF070605)
+val AmberNightSurface = Color(0xFF1A1612)
+val AmberNightOnBackground = Color(0xFFE0B080)
+val AmberNightOnSurface = Color(0xFFE8BC8E)
+val AmberNightSecondaryText = Color(0xFFA68560)
+val AmberNightBorder = Color(0xFF382C20)
+
+// 3. Slate Charcoal (Muted Deep Dark)
+val SlateBackground = Color(0xFF121418)
+val SlateSurface = Color(0xFF1E2128)
+val SlateOnBackground = Color(0xFFE8EBF0)
+val SlateOnSurface = Color(0xFFDFE3EB)
+val SlateSecondaryText = Color(0xFF9098A8)
+val SlateBorder = Color(0xFF2C3240)
+
+// 4. High-Contrast 1-Bit Monochrome
+val MonoBackground = Color(0xFFFFFFFF)
+val MonoSurface = Color(0xFFF0F0F0)
+val MonoOnBackground = Color(0xFF000000)
+val MonoOnSurface = Color(0xFF000000)
+val MonoSecondaryText = Color(0xFF333333)
+val MonoBorder = Color(0xFF000000)
 
 private val EPaperDayColorScheme = lightColorScheme(
     primary = PaperWhiteOnBackground,
@@ -117,7 +150,7 @@ private val EPaperDayColorScheme = lightColorScheme(
     onSurfaceVariant = PaperWhiteSecondaryText
 )
 
-private val EPaperNightColorScheme = darkColorScheme(
+private val EPaperAmberColorScheme = darkColorScheme(
     primary = AmberNightOnBackground,
     onPrimary = AmberNightBackground,
     background = AmberNightBackground,
@@ -128,16 +161,54 @@ private val EPaperNightColorScheme = darkColorScheme(
     onSurfaceVariant = AmberNightSecondaryText
 )
 
+private val EPaperSlateColorScheme = darkColorScheme(
+    primary = SlateOnBackground,
+    onPrimary = SlateBackground,
+    background = SlateBackground,
+    onBackground = SlateOnBackground,
+    surface = SlateSurface,
+    onSurface = SlateOnSurface,
+    surfaceVariant = SlateBorder,
+    onSurfaceVariant = SlateSecondaryText
+)
+
+private val EPaperMonoColorScheme = lightColorScheme(
+    primary = MonoOnBackground,
+    onPrimary = MonoBackground,
+    background = MonoBackground,
+    onBackground = MonoOnBackground,
+    surface = MonoSurface,
+    onSurface = MonoOnSurface,
+    surfaceVariant = MonoBorder,
+    onSurfaceVariant = MonoSecondaryText
+)
+
 @Composable
 fun EPaperTheme(
-    isNightMode: Boolean = false,
+    profile: EPaperColorProfile = EPaperColorProfile.PAPER_WHITE,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (isNightMode) EPaperNightColorScheme else EPaperDayColorScheme
+    val colorScheme = when (profile) {
+        EPaperColorProfile.PAPER_WHITE -> EPaperDayColorScheme
+        EPaperColorProfile.WARM_AMBER -> EPaperAmberColorScheme
+        EPaperColorProfile.SLATE_CHARCOAL -> EPaperSlateColorScheme
+        EPaperColorProfile.HIGH_CONTRAST -> EPaperMonoColorScheme
+    }
 
     MaterialTheme(
         colorScheme = colorScheme,
         typography = EPaperTypography,
+        content = content
+    )
+}
+
+@Composable
+fun EPaperTheme(
+    isNightMode: Boolean,
+    content: @Composable () -> Unit
+) {
+    EPaperTheme(
+        profile = if (isNightMode) EPaperColorProfile.WARM_AMBER else EPaperColorProfile.PAPER_WHITE,
         content = content
     )
 }
