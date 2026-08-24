@@ -1,67 +1,49 @@
 package com.example.ui.screens
 
-import android.content.Intent
-import android.net.Uri
-import android.view.KeyEvent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Apps
-import androidx.compose.material.icons.filled.Bluetooth
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.DirectionsCar
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Navigation
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.AppInfo
+import com.example.db.DriveCommShortcutEntity
+import com.example.db.DriveNavLocationEntity
 import com.example.ui.DriveStats
 import com.example.ui.LauncherViewModel
-import com.example.util.toImageBitmapSafe
+import com.example.ui.components.drive.DriveAdaptiveMediaCard
+import com.example.ui.components.drive.DriveAppDrawerCard
+import com.example.ui.components.drive.DriveAppPickerSheet
+import com.example.ui.components.drive.DriveCommContactEditSheet
+import com.example.ui.components.drive.DriveCommShortcutsCard
+import com.example.ui.components.drive.DriveNavCard
+import com.example.ui.components.drive.DriveNavLocationEditSheet
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 
+/**
+ * Modern Minimalist Drive Mode Dashboard
+ */
 @Composable
 fun DriveModeScreen(
     viewModel: LauncherViewModel,
@@ -70,482 +52,221 @@ fun DriveModeScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val isMediaPlaying = remember(context) { viewModel.isMediaActive(context) }
+    val scrollState = rememberScrollState()
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Request location permissions for GPS Speedometer
-    val locationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { results ->
-        if (results.values.any { it }) {
-            viewModel.startSpeedTracking()
+    // State collections
+    val navLocations by viewModel.driveNavLocations.collectAsStateWithLifecycle()
+    val commShortcuts by viewModel.driveCommShortcuts.collectAsStateWithLifecycle()
+    val mediaTrack by viewModel.driveMediaTrack.collectAsStateWithLifecycle()
+    val driveFavoritePackages by viewModel.driveFavoritePackages.collectAsStateWithLifecycle()
+    val appPairs by viewModel.driveAppPairs.collectAsStateWithLifecycle()
+    val quickShortcuts by viewModel.driveQuickShortcuts.collectAsStateWithLifecycle()
+
+    var pendingCallShortcut by remember { mutableStateOf<DriveCommShortcutEntity?>(null) }
+    val callPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted && pendingCallShortcut != null) {
+            viewModel.launchDriveCommShortcut(context, pendingCallShortcut!!)
+            pendingCallShortcut = null
         }
     }
 
-    androidx.compose.runtime.DisposableEffect(Unit) {
-        locationPermissionLauncher.launch(
-            arrayOf(
-                android.Manifest.permission.ACCESS_FINE_LOCATION,
-                android.Manifest.permission.ACCESS_COARSE_LOCATION
-            )
-        )
-        viewModel.startSpeedTracking()
+    var isNotificationAccessGranted by remember {
+        mutableStateOf(viewModel.isNotificationListenerGranted(context))
+    }
+
+    // Observe lifecycle ON_RESUME so granted permission updates dynamically without restarting
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isNotificationAccessGranted = viewModel.isNotificationListenerGranted(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
-            viewModel.stopSpeedTracking()
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
-    // Filter media & music applications from installed apps list
-    val mediaApps = remember(allApps) {
-        allApps.filter { app ->
-            val pkg = app.packageName.lowercase()
-            val label = app.label.lowercase()
-            app.category == "Media" ||
-                    pkg.contains("music") || pkg.contains("spotify") || pkg.contains("youtube") ||
-                    pkg.contains("audio") || pkg.contains("podcast") || pkg.contains("player") ||
-                    pkg.contains("radio") || pkg.contains("soundcloud") || pkg.contains("pandora") ||
-                    label.contains("music") || label.contains("audio") || label.contains("player") || label.contains("radio")
+    // Filter media apps
+    val installedMediaApps = remember(allApps) {
+        viewModel.getInstalledMediaApps()
+    }
+
+    // Modal sheet states
+    var editingNavLocation by remember { mutableStateOf<DriveNavLocationEntity?>(null) }
+    var editingCommSlotIndex by remember { mutableIntStateOf(-1) }
+    var editingCommShortcut by remember { mutableStateOf<DriveCommShortcutEntity?>(null) }
+    var isAppPickerVisible by remember { mutableStateOf(false) }
+    var isAppPairPickerVisible by remember { mutableStateOf(false) }
+    var isShortcutPickerVisible by remember { mutableStateOf(false) }
+
+    // Start real-time audio playback listener when entering screen
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        viewModel.startMediaPlaybackTracking(context)
+        onDispose {
+            viewModel.stopMediaPlaybackTracking()
         }
     }
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF0E1015)) // Car Cockpit dark background
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .background(Color(0xFF0B0D13)) // Deep minimal cockpit dark theme
     ) {
-        // Drive Banner / Speedometer Telemetry Card (Clickable to simulate speed for testing)
-        Card(
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF181B24)),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF282D3C)),
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .clickable { viewModel.toggleSpeedSimulation() }
-                .testTag("speedometer_card")
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 14.dp)
+                .verticalScroll(scrollState),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.DirectionsCar,
-                            contentDescription = null,
-                            tint = Color(0xFFFF9800),
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "DRIVE MODE ACTIVE",
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFFFF9800),
-                            fontSize = 14.sp,
-                            letterSpacing = 1.sp
-                        )
+            // 1. Minimalist Navigation Card (Maps Launch + 4 Destination Pills)
+            DriveNavCard(
+                locations = navLocations,
+                onOpenMapsClick = { viewModel.launchDriveNavigation(context, null) },
+                onLocationClick = { location ->
+                    if (location.addressOrQuery.isNotBlank()) {
+                        viewModel.launchDriveNavLocation(context, location)
+                    } else {
+                        editingNavLocation = location
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = if (driveStats.connectedBluetoothDevice != null) "Connected: ${driveStats.connectedBluetoothDevice}" else "GPS Active • Tap to test speed simulation",
-                        fontSize = 11.sp,
-                        color = Color.White.copy(alpha = 0.6f)
-                    )
-                }
+                },
+                onLocationLongClick = { location ->
+                    editingNavLocation = location
+                },
+                onLaunchAssistant = { viewModel.launchDriveVoiceAssistant(context) }
+            )
 
-                // Speedometer Indicator
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Icon(
-                        imageVector = Icons.Default.Speed,
-                        contentDescription = "Speedometer",
-                        tint = if (driveStats.currentSpeedMph > 0) Color(0xFFFF9800) else Color.White.copy(alpha = 0.9f),
-                        modifier = Modifier.size(28.dp)
+            // 2. Adaptive Dual-State Media Card (Music Apps List <-> Streamlined Player with pause persistence)
+            DriveAdaptiveMediaCard(
+                trackInfo = mediaTrack,
+                mediaApps = installedMediaApps,
+                onLaunchMediaApp = { app -> viewModel.launchApp(context, app) },
+                onMediaKeyClick = { keyCode -> viewModel.sendMediaKeyEvent(context, keyCode) },
+                onOpenCurrentMediaApp = { viewModel.launchDriveMediaApp(context, mediaTrack.activeAppPackage) },
+                onEnableNotificationAccess = { viewModel.openNotificationListenerSettings(context) },
+                isNotificationAccessGranted = isNotificationAccessGranted
+            )
+
+            // 3. Simplified Favorite Communication Shortcuts Card (Call/Message with side badge)
+            DriveCommShortcutsCard(
+                shortcuts = commShortcuts,
+                onShortcutClick = { shortcut ->
+                    viewModel.launchDriveCommShortcut(
+                        context = context,
+                        shortcut = shortcut,
+                        onRequestCallPermission = {
+                            pendingCallShortcut = shortcut
+                            callPermissionLauncher.launch(android.Manifest.permission.CALL_PHONE)
+                        }
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "${driveStats.currentSpeedMph}",
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Text(
-                        text = " MPH",
-                        fontSize = 12.sp,
-                        color = Color.White.copy(alpha = 0.7f),
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
+                },
+                onShortcutLongClick = { slotIndex, shortcut ->
+                    editingCommSlotIndex = slotIndex
+                    editingCommShortcut = shortcut
                 }
-            }
+            )
+
+            // 4. Categorized Driving App & Shortcut Drawer (Apps, Shortcuts, App Pairs)
+            DriveAppDrawerCard(
+                pinnedPackages = driveFavoritePackages,
+                allApps = allApps,
+                appPairs = appPairs,
+                quickShortcuts = quickShortcuts,
+                onLaunchApp = { app -> viewModel.launchApp(context, app) },
+                onLaunchAppPair = { pair -> viewModel.launchAppPair(context, pair) },
+                onLaunchQuickShortcut = { shortcut -> viewModel.launchDriveQuickShortcut(context, shortcut) },
+                onAddAppClick = { isAppPickerVisible = true },
+                onAddAppPairClick = { isAppPairPickerVisible = true },
+                onAddShortcutClick = { isShortcutPickerVisible = true },
+                onRemoveAppClick = { pkg -> viewModel.toggleDriveFavorite(pkg) },
+                onRemoveAppPairClick = { id -> viewModel.removeDriveAppPair(id) },
+                onRemoveShortcutClick = { id -> viewModel.removeDriveQuickShortcut(id) }
+            )
+
+            Spacer(modifier = Modifier.height(72.dp))
         }
 
-        // Giant Navigation Action Card
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = Color(0xFF1E3A8A), // High visibility deep blue
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(24.dp))
-                .clickable {
-                    try {
-                        val mapIntent = Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=Gas+Station"))
-                        mapIntent.setPackage("com.google.android.apps.maps")
-                        context.startActivity(mapIntent)
-                    } catch (e: Exception) {
-                        try {
-                            val genericMap = Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0"))
-                            context.startActivity(genericMap)
-                        } catch (err: Exception) {
-                            err.printStackTrace()
-                        }
-                    }
-                }
-                .testTag("drive_navigation_card")
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(22.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(18.dp),
-                    color = Color.White.copy(alpha = 0.2f),
-                    modifier = Modifier.size(60.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.Navigation,
-                            contentDescription = "Navigation",
-                            tint = Color.White,
-                            modifier = Modifier.size(34.dp)
-                        )
-                    }
-                }
+        // Voice Assistant is now embedded in DriveNavCard (80/20 row)
 
-                Spacer(modifier = Modifier.width(16.dp))
-
-                Column {
-                    Text(
-                        text = "Start Navigation",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Text(
-                        text = "Tap to open Maps & Directions",
-                        fontSize = 13.sp,
-                        color = Color.White.copy(alpha = 0.8f)
-                    )
-                }
-            }
+        // Sheet 1: Navigation Destination Editor Sheet
+        editingNavLocation?.let { location ->
+            DriveNavLocationEditSheet(
+                location = location,
+                onSearchSuggestions = { query -> viewModel.searchPlaceSuggestions(context, query) },
+                onSave = { label, address ->
+                    viewModel.saveDriveNavLocation(location.id, label, address)
+                    editingNavLocation = null
+                },
+                onDismiss = { editingNavLocation = null }
+            )
         }
 
-        // Row of 2 Large Touch Action Cards: Hands-Free Phone & Voice Assistant
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Phone Card
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = Color(0xFF15803D), // High visibility emerald green
-                modifier = Modifier
-                    .weight(1f)
-                    .height(125.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .clickable {
-                        try {
-                            val intent = Intent(Intent.ACTION_DIAL)
-                            context.startActivity(intent)
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    }
-                    .testTag("drive_phone_card")
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Call,
-                        contentDescription = "Phone",
-                        tint = Color.White,
-                        modifier = Modifier.size(30.dp)
+        // Sheet 2: Communication Contact Shortcut Editor Sheet (with native Contact Picker)
+        if (editingCommSlotIndex >= 0) {
+            DriveCommContactEditSheet(
+                slotIndex = editingCommSlotIndex,
+                existingShortcut = editingCommShortcut,
+                onSave = { name, phone, channel, photoUri ->
+                    viewModel.saveDriveCommShortcut(
+                        slotIndex = editingCommSlotIndex,
+                        name = name,
+                        phoneNumber = phone,
+                        channelType = channel,
+                        photoUri = photoUri
                     )
-                    Column {
-                        Text(
-                            text = "Phone Dialer",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Text(
-                            text = "Hands-free call",
-                            fontSize = 12.sp,
-                            color = Color.White.copy(alpha = 0.8f)
-                        )
-                    }
+                    editingCommSlotIndex = -1
+                    editingCommShortcut = null
+                },
+                onDelete = {
+                    viewModel.deleteDriveCommShortcut(editingCommSlotIndex)
+                    editingCommSlotIndex = -1
+                    editingCommShortcut = null
+                },
+                onDismiss = {
+                    editingCommSlotIndex = -1
+                    editingCommShortcut = null
                 }
-            }
-
-            // Voice Assistant Card
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = Color(0xFFB45309), // Warm amber card
-                modifier = Modifier
-                    .weight(1f)
-                    .height(125.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .clickable {
-                        try {
-                            val intent = Intent(Intent.ACTION_VOICE_COMMAND)
-                            context.startActivity(intent)
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    }
-                    .testTag("drive_voice_card")
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Mic,
-                        contentDescription = "Voice Search",
-                        tint = Color.White,
-                        modifier = Modifier.size(30.dp)
-                    )
-                    Column {
-                        Text(
-                            text = "Voice Assistant",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Text(
-                            text = "Speak command",
-                            fontSize = 12.sp,
-                            color = Color.White.copy(alpha = 0.8f)
-                        )
-                    }
-                }
-            }
+            )
         }
 
-        // Live Media Controls Card
-        Card(
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF181B24)),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF282D3C)),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = Color(0xFF10B981).copy(alpha = 0.15f),
-                            modifier = Modifier.size(42.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.MusicNote,
-                                    contentDescription = "Media Player",
-                                    tint = Color(0xFF10B981),
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = "Media Controller",
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                fontSize = 16.sp
-                            )
-                            Text(
-                                text = if (isMediaPlaying) "Audio Session Active" else "Controls background player",
-                                fontSize = 12.sp,
-                                color = Color.White.copy(alpha = 0.6f)
-                            )
-                        }
-                    }
-
-                    // Hardware Media Key Controls
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        // Previous Track Button
-                        IconButton(
-                            onClick = {
-                                viewModel.sendMediaKeyEvent(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS)
-                            },
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color.White.copy(alpha = 0.1f))
-                                .size(44.dp)
-                                .testTag("drive_media_prev_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.SkipPrevious,
-                                contentDescription = "Previous Track",
-                                tint = Color.White
-                            )
-                        }
-
-                        // Play / Pause Toggle Button
-                        IconButton(
-                            onClick = {
-                                viewModel.sendMediaKeyEvent(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
-                            },
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFF10B981))
-                                .size(48.dp)
-                                .testTag("drive_music_play_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PlayArrow,
-                                contentDescription = "Play/Pause Media",
-                                tint = Color.Black,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-
-                        // Next Track Button
-                        IconButton(
-                            onClick = {
-                                viewModel.sendMediaKeyEvent(context, KeyEvent.KEYCODE_MEDIA_NEXT)
-                            },
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color.White.copy(alpha = 0.1f))
-                                .size(44.dp)
-                                .testTag("drive_media_next_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.SkipNext,
-                                contentDescription = "Next Track",
-                                tint = Color.White
-                            )
-                        }
-                    }
-                }
-            }
+        // Sheet 3: App Shortcut Picker Sheet
+        if (isAppPickerVisible) {
+            DriveAppPickerSheet(
+                allApps = allApps,
+                onSelectApp = { app ->
+                    viewModel.toggleDriveFavorite(app.packageName)
+                    isAppPickerVisible = false
+                },
+                onDismiss = { isAppPickerVisible = false }
+            )
         }
 
-        // Minimal & Modern Media Apps Grid Section displaying actual app icons
-        if (mediaApps.isNotEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text = "QUICK MEDIA ACCESS",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFFA78BFA),
-                    letterSpacing = 1.sp,
-                    modifier = Modifier.padding(start = 4.dp)
-                )
+        // Sheet 4: App Pair Creator Sheet
+        if (isAppPairPickerVisible) {
+            com.example.ui.components.drive.DriveAppPairCreateSheet(
+                allApps = allApps,
+                onCreatePair = { label, pkg1, pkg2 ->
+                    viewModel.addDriveAppPair(label, pkg1, pkg2)
+                    isAppPairPickerVisible = false
+                },
+                onDismiss = { isAppPairPickerVisible = false }
+            )
+        }
 
-                // Render apps as modern icon tiles in 4-column grid layout
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    mediaApps.chunked(4).forEach { rowApps ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            rowApps.forEach { app ->
-                                DriveAppIconCard(
-                                    appInfo = app,
-                                    onClick = { viewModel.launchApp(context, app) },
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                            // Fill remaining space if less than 4 apps in last row
-                            repeat(4 - rowApps.size) {
-                                Spacer(modifier = Modifier.weight(1f))
-                            }
-                        }
-                    }
-                }
-            }
+        // Sheet 5: Android App Shortcut Picker Sheet (LauncherApps API)
+        if (isShortcutPickerVisible) {
+            com.example.ui.components.drive.DriveAppShortcutPickerSheet(
+                allApps = allApps,
+                onSelectShortcut = { packageName, shortcutId, label, appName ->
+                    viewModel.addDriveQuickShortcut(packageName, shortcutId, label, appName)
+                    isShortcutPickerVisible = false
+                },
+                onDismiss = { isShortcutPickerVisible = false }
+            )
         }
     }
 }
-
-@Composable
-private fun DriveAppIconCard(
-    appInfo: AppInfo,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val context = LocalContext.current
-    val imageBitmap = remember(appInfo) {
-        appInfo.iconDrawable?.toImageBitmapSafe() ?: try {
-            context.packageManager.getApplicationIcon(appInfo.packageName).toImageBitmapSafe()
-        } catch (e: Throwable) {
-            null
-        }
-    }
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier
-            .clip(RoundedCornerShape(18.dp))
-            .background(Color(0xFF181B24))
-            .border(1.dp, Color(0xFF282D3C), RoundedCornerShape(18.dp))
-            .clickable { onClick() }
-            .padding(vertical = 12.dp, horizontal = 6.dp)
-            .testTag("drive_app_icon_${appInfo.packageName}")
-    ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(52.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(Color(0xFF242836))
-        ) {
-            if (imageBitmap != null) {
-                Image(
-                    bitmap = imageBitmap,
-                    contentDescription = appInfo.label,
-                    modifier = Modifier.size(36.dp)
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.Apps,
-                    contentDescription = appInfo.label,
-                    tint = Color(0xFFA78BFA),
-                    modifier = Modifier.size(26.dp)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = appInfo.label,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = Color.White,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center
-        )
-    }
-}
-

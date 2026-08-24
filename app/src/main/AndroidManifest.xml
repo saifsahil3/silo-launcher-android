@@ -12,6 +12,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <!-- Explicitly set hardware telephony to optional so tablets and ChromeOS devices are supported -->
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
 
     <queries>
         <intent>
@@ -61,6 +66,17 @@
         <receiver
             android:name="com.example.service.TriggerBroadcastReceiver"
             android:exported="false" />
+
+        <!-- Notification & MediaSession Listener for real-time track info & album art -->
+        <service
+            android:name="com.example.service.SiloNotificationListenerService"
+            android:exported="true"
+            android:label="Silo Media Controller"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
 
         <!-- Quick Settings Tile for Silo Focus Mode -->
         <service

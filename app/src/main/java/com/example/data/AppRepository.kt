@@ -69,7 +69,7 @@ class AppRepository {
                         false
                     }
 
-                    val category = categorizeApp(packageName, label, isSystemApp)
+                    val category = categorizeApp(activityInfo.applicationInfo, packageName, label, isSystemApp)
 
                     appList.add(
                         AppInfo(
@@ -158,7 +158,25 @@ class AppRepository {
         launcherList.distinctBy { it.packageName }
     }
 
-    private fun categorizeApp(packageName: String, label: String, isSystemApp: Boolean): String {
+    private fun categorizeApp(appInfo: ApplicationInfo?, packageName: String, label: String, isSystemApp: Boolean): String {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            if (appInfo != null && appInfo.category == ApplicationInfo.CATEGORY_NEWS) {
+                return "News"
+            }
+        }
+
+        // Temporary AppInfo object to evaluate reading detection
+        val dummyAppInfo = AppInfo(
+            label = label,
+            packageName = packageName,
+            launchIntent = Intent(),
+            isSystemApp = isSystemApp,
+            category = "General"
+        )
+        if (ReadingAppDetector.isReadingOrNewsApp(dummyAppInfo)) {
+            return "Reading"
+        }
+
         val pkg = packageName.lowercase()
 
         return when {
