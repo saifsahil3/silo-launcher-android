@@ -46,7 +46,52 @@ import java.util.Locale
 data class DriveStats(
     val currentSpeedMph: Int = 0,
     val isDrivingDetected: Boolean = false,
-    val connectedBluetoothDevice: String? = null
+    val connectedBluetoothDevice: String? = null,
+    val latitude: Double = 37.7749,
+    val longitude: Double = -122.4194
+)
+
+data class DriveMediaTrackInfo(
+    val title: String = "No media playing",
+    val artist: String = "Tap an app below to play",
+    val album: String = "",
+    val isPlaying: Boolean = false,
+    val activeAppPackage: String? = null,
+    val activeAppName: String = "Music",
+    val albumArtBitmap: android.graphics.Bitmap? = null,
+    val albumArtUri: String? = null
+)
+
+data class DriveDestinationEta(
+    val id: String,
+    val title: String,
+    val subtitle: String = "",
+    val etaMinutes: Int = 18,
+    val distanceMiles: Double = 6.4,
+    val query: String = ""
+)
+
+data class DriveAppPair(
+    val id: String,
+    val label: String,
+    val package1: String,
+    val package2: String
+)
+
+data class DriveQuickShortcut(
+    val id: String,
+    val packageName: String,
+    val shortcutId: String,
+    val label: String,
+    val appName: String = ""
+)
+
+data class DriveManeuverInfo(
+    val isNavigating: Boolean = false,
+    val maneuverType: String = "LEFT", // LEFT, RIGHT, STRAIGHT, UTURN
+    val instruction: String = "In 0.5 mi, turn left onto Main St.",
+    val roadName: String = "Main St.",
+    val distanceRemainingText: String = "0.5 mi"
 )
 
 data class SleepState(
@@ -69,6 +114,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val appRepository = AppRepository()
     private val db = DatabaseProvider.getDatabase(application)
     private val dao = db.modeSettingDao()
+    private val driveShortcutDao = db.driveShortcutDao()
+    private val driveNavLocationDao = db.driveNavLocationDao()
+    private val driveCommShortcutDao = db.driveCommShortcutDao()
 
     private val _currentMode = MutableStateFlow(LauncherMode.FOCUS)
     val currentMode: StateFlow<LauncherMode> = _currentMode.asStateFlow()
@@ -98,11 +146,42 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val _focusGoal = MutableStateFlow("Deep Work & Zero Distractions")
     val focusGoal: StateFlow<String> = _focusGoal.asStateFlow()
 
-    // Drive Mode
     private val _driveFavoritePackages = MutableStateFlow<List<String>>(emptyList())
     val driveFavoritePackages: StateFlow<List<String>> = _driveFavoritePackages.asStateFlow()
+
+    private val drivePrefs = application.getSharedPreferences("silo_drive_cockpit_prefs", Context.MODE_PRIVATE)
+
+    private val _driveAppPairs = MutableStateFlow<List<DriveAppPair>>(loadSavedDriveAppPairs())
+    val driveAppPairs: StateFlow<List<DriveAppPair>> = _driveAppPairs.asStateFlow()
+
+    private val _driveQuickShortcuts = MutableStateFlow<List<DriveQuickShortcut>>(loadSavedDriveQuickShortcuts())
+    val driveQuickShortcuts: StateFlow<List<DriveQuickShortcut>> = _driveQuickShortcuts.asStateFlow()
     private val _driveStats = MutableStateFlow(DriveStats())
     val driveStats: StateFlow<DriveStats> = _driveStats.asStateFlow()
+
+    private val _driveShortcuts = MutableStateFlow<List<com.example.db.DriveShortcutEntity>>(emptyList())
+    val driveShortcuts: StateFlow<List<com.example.db.DriveShortcutEntity>> = _driveShortcuts.asStateFlow()
+
+    private val _driveNavLocations = MutableStateFlow<List<com.example.db.DriveNavLocationEntity>>(emptyList())
+    val driveNavLocations: StateFlow<List<com.example.db.DriveNavLocationEntity>> = _driveNavLocations.asStateFlow()
+
+    private val _driveCommShortcuts = MutableStateFlow<List<com.example.db.DriveCommShortcutEntity>>(emptyList())
+    val driveCommShortcuts: StateFlow<List<com.example.db.DriveCommShortcutEntity>> = _driveCommShortcuts.asStateFlow()
+
+    private val _driveMediaTrack = MutableStateFlow(DriveMediaTrackInfo())
+    val driveMediaTrack: StateFlow<DriveMediaTrackInfo> = _driveMediaTrack.asStateFlow()
+
+    private val _driveDestinationEtas = MutableStateFlow<List<DriveDestinationEta>>(
+        listOf(
+            DriveDestinationEta(id = "home", title = "Home", subtitle = "124 Grand Ave", etaMinutes = 18, distanceMiles = 6.4, query = "Home"),
+            DriveDestinationEta(id = "work", title = "Work", subtitle = "Tech Park HQ", etaMinutes = 24, distanceMiles = 9.8, query = "Work"),
+            DriveDestinationEta(id = "gas", title = "Gas Station", subtitle = "Nearby fuel", etaMinutes = 4, distanceMiles = 1.1, query = "Gas Station")
+        )
+    )
+    val driveDestinationEtas: StateFlow<List<DriveDestinationEta>> = _driveDestinationEtas.asStateFlow()
+
+    private val _driveManeuver = MutableStateFlow(DriveManeuverInfo())
+    val driveManeuver: StateFlow<DriveManeuverInfo> = _driveManeuver.asStateFlow()
 
     // Sleep Mode
     private val _sleepState = MutableStateFlow(SleepState())
@@ -213,7 +292,19 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         loadCreatorStageConfigs()
         loadOfflineBooks()
         loadPinnedReadingApps()
+        loadDriveShortcuts()
+        loadDriveNavLocations()
+        loadDriveCommShortcuts()
         registerBatteryReceiver()
+
+        // Observe real-time media metadata and playback updates
+        viewModelScope.launch {
+            com.example.service.MediaStateManager.currentTrack.collectLatest { track ->
+                if (track.title != "No media playing" || track.isPlaying) {
+                    _driveMediaTrack.value = track
+                }
+            }
+        }
 
         // Register internal trigger receiver safely
         try {
@@ -397,6 +488,694 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun toggleDriveFavorite(packageName: String) {
+        toggleDriveFavoritePackage(packageName)
+    }
+
+    private fun loadDriveShortcuts() {
+        viewModelScope.launch {
+            try {
+                driveShortcutDao.getAllShortcutsFlow().collectLatest { shortcuts ->
+                    if (shortcuts.isEmpty()) {
+                        // Seed default initial slots
+                        val defaultSpeedDial = com.example.db.DriveShortcutEntity(
+                            slotIndex = 0,
+                            type = "SPEED_DIAL",
+                            label = "Speed Dial",
+                            phoneNumber = ""
+                        )
+                        driveShortcutDao.saveShortcut(defaultSpeedDial)
+                    } else {
+                        _driveShortcuts.value = shortcuts
+                    }
+                }
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun saveDriveShortcut(slotIndex: Int, type: String, label: String, packageName: String, phoneNumber: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                driveShortcutDao.saveShortcut(
+                    com.example.db.DriveShortcutEntity(
+                        slotIndex = slotIndex,
+                        type = type,
+                        label = label,
+                        packageName = packageName,
+                        phoneNumber = phoneNumber
+                    )
+                )
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun deleteDriveShortcut(slotIndex: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                driveShortcutDao.deleteShortcut(slotIndex)
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun updateDriveSpeedDial(label: String, phoneNumber: String) {
+        saveDriveShortcut(
+            slotIndex = 0,
+            type = "SPEED_DIAL",
+            label = label.ifBlank { "Speed Dial" },
+            packageName = "",
+            phoneNumber = phoneNumber.trim()
+        )
+    }
+
+    private fun loadDriveNavLocations() {
+        viewModelScope.launch {
+            try {
+                driveNavLocationDao.getAllNavLocationsFlow().collectLatest { locations ->
+                    if (locations.isEmpty()) {
+                        val defaults = listOf(
+                            com.example.db.DriveNavLocationEntity("home", "Home", "Home", 0),
+                            com.example.db.DriveNavLocationEntity("work", "Work", "Work", 1),
+                            com.example.db.DriveNavLocationEntity("custom1", "Gym", "", 2),
+                            com.example.db.DriveNavLocationEntity("custom2", "Airport", "", 3)
+                        )
+                        driveNavLocationDao.saveAllNavLocations(defaults)
+                    } else {
+                        _driveNavLocations.value = locations
+                    }
+                }
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun saveDriveNavLocation(id: String, label: String, addressOrQuery: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val existing = _driveNavLocations.value.find { it.id == id }
+                val order = existing?.displayOrder ?: when (id) {
+                    "home" -> 0
+                    "work" -> 1
+                    "custom1" -> 2
+                    else -> 3
+                }
+                driveNavLocationDao.saveNavLocation(
+                    com.example.db.DriveNavLocationEntity(
+                        id = id,
+                        label = label.ifBlank { id.replaceFirstChar { it.uppercase() } },
+                        addressOrQuery = addressOrQuery.trim(),
+                        displayOrder = order
+                    )
+                )
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun launchDriveNavLocation(context: Context, location: com.example.db.DriveNavLocationEntity) {
+        val query = location.addressOrQuery.ifBlank { location.label }
+        launchDriveNavigation(context, query)
+    }
+
+    private fun loadDriveCommShortcuts() {
+        viewModelScope.launch {
+            try {
+                driveCommShortcutDao.getAllCommShortcutsFlow().collectLatest { shortcuts ->
+                    if (shortcuts.isEmpty()) {
+                        // Seed 4 empty default slots
+                        for (i in 0..3) {
+                            driveCommShortcutDao.saveCommShortcut(
+                                com.example.db.DriveCommShortcutEntity(
+                                    slotIndex = i,
+                                    name = "",
+                                    phoneNumber = "",
+                                    channelType = when (i) {
+                                        0 -> "CALL"
+                                        1 -> "WHATSAPP"
+                                        2 -> "SMS"
+                                        else -> "TELEGRAM"
+                                    }
+                                )
+                            )
+                        }
+                    } else {
+                        _driveCommShortcuts.value = shortcuts
+                    }
+                }
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun saveDriveCommShortcut(slotIndex: Int, name: String, phoneNumber: String, channelType: String, photoUri: String? = null) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                driveCommShortcutDao.saveCommShortcut(
+                    com.example.db.DriveCommShortcutEntity(
+                        slotIndex = slotIndex,
+                        name = name.trim(),
+                        phoneNumber = phoneNumber.trim(),
+                        channelType = channelType,
+                        photoUri = photoUri
+                    )
+                )
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun deleteDriveCommShortcut(slotIndex: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                driveCommShortcutDao.saveCommShortcut(
+                    com.example.db.DriveCommShortcutEntity(
+                        slotIndex = slotIndex,
+                        name = "",
+                        phoneNumber = "",
+                        channelType = "CALL"
+                    )
+                )
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun launchDriveCommShortcut(
+        context: Context,
+        shortcut: com.example.db.DriveCommShortcutEntity,
+        onRequestCallPermission: (() -> Unit)? = null
+    ) {
+        val rawNumber = shortcut.phoneNumber.trim()
+        val cleanNumber = rawNumber.replace("[^0-9+]".toRegex(), "")
+        if (cleanNumber.isBlank()) {
+            android.widget.Toast.makeText(context, "No phone number configured", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        try {
+            when (shortcut.channelType.uppercase()) {
+                "CALL" -> {
+                    val hasCallPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+                        context,
+                        android.Manifest.permission.CALL_PHONE
+                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+                    if (hasCallPermission) {
+                        try {
+                            val callIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:${Uri.encode(cleanNumber)}")).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(callIntent)
+                        } catch (e: SecurityException) {
+                            if (onRequestCallPermission != null) {
+                                onRequestCallPermission()
+                            } else {
+                                val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${Uri.encode(cleanNumber)}")).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(dialIntent)
+                            }
+                        }
+                    } else {
+                        if (onRequestCallPermission != null) {
+                            onRequestCallPermission()
+                        } else {
+                            val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${Uri.encode(cleanNumber)}")).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(dialIntent)
+                        }
+                    }
+                }
+                "WHATSAPP" -> {
+                    val formattedNumber = cleanNumber.removePrefix("+")
+                    val waIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://api.whatsapp.com/send?phone=$formattedNumber")).apply {
+                        setPackage("com.whatsapp")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    try {
+                        context.startActivity(waIntent)
+                    } catch (e: Exception) {
+                        val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://api.whatsapp.com/send?phone=$formattedNumber")).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(webIntent)
+                    }
+                }
+                "SMS" -> {
+                    val smsIntent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:${Uri.encode(cleanNumber)}")).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(smsIntent)
+                }
+                "TELEGRAM" -> {
+                    val tgIntent = Intent(Intent.ACTION_VIEW, Uri.parse("tg://msg?to=$cleanNumber")).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    try {
+                        context.startActivity(tgIntent)
+                    } catch (e: Exception) {
+                        val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/$cleanNumber")).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(webIntent)
+                    }
+                }
+                else -> {
+                    val fallbackIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${Uri.encode(cleanNumber)}")).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(fallbackIntent)
+                }
+            }
+        } catch (e: Exception) {
+            try {
+                val fallbackIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${Uri.encode(cleanNumber)}")).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(fallbackIntent)
+            } catch (err: Exception) {
+                android.widget.Toast.makeText(context, "Could not open communication shortcut", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    fun addDriveAppPair(label: String, pkg1: String, pkg2: String) {
+        val newPair = DriveAppPair(
+            id = "pair_${System.currentTimeMillis()}",
+            label = label.ifBlank { "App Pair" },
+            package1 = pkg1,
+            package2 = pkg2
+        )
+        val updated = _driveAppPairs.value + newPair
+        _driveAppPairs.value = updated
+        saveDriveAppPairsToPrefs(updated)
+    }
+
+    fun removeDriveAppPair(id: String) {
+        val updated = _driveAppPairs.value.filter { it.id != id }
+        _driveAppPairs.value = updated
+        saveDriveAppPairsToPrefs(updated)
+    }
+
+    fun launchAppPair(context: Context, appPair: DriveAppPair) {
+        try {
+            val pm = context.packageManager
+            val intent1 = pm.getLaunchIntentForPackage(appPair.package1)
+            val intent2 = pm.getLaunchIntentForPackage(appPair.package2)
+
+            if (intent1 == null || intent2 == null) {
+                val missingPkg = if (intent1 == null) appPair.package1 else appPair.package2
+                val appLabel = _allApps.value.find { it.packageName == missingPkg }?.label ?: missingPkg
+                android.widget.Toast.makeText(context, "App not installed: $appLabel", android.widget.Toast.LENGTH_SHORT).show()
+                return
+            }
+
+            intent1.apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+                putExtra("com.samsung.android.extra.SPLIT_SCREEN_PRIMARY", true)
+                putExtra("android.intent.extra.WINDOW_MODE", 0x20000000)
+            }
+
+            intent2.apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
+                addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+                putExtra("com.samsung.android.extra.SPLIT_SCREEN_PRIMARY", false)
+                putExtra("android.intent.extra.WINDOW_MODE", 0x20000000)
+            }
+
+            val options1 = createSplitScreenBundle(isPrimary = true)
+            val options2 = createSplitScreenBundle(isPrimary = false)
+
+            if (options1 != null) {
+                context.startActivity(intent1, options1)
+            } else {
+                context.startActivity(intent1)
+            }
+
+            viewModelScope.launch(Dispatchers.Main) {
+                delay(400)
+                try {
+                    if (options2 != null) {
+                        context.startActivity(intent2, options2)
+                    } else {
+                        context.startActivity(intent2)
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    try { context.startActivity(intent2) } catch (ex: Exception) {}
+                }
+            }
+
+            android.widget.Toast.makeText(context, "Opening Split-Screen: ${appPair.label}", android.widget.Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            android.widget.Toast.makeText(context, "Failed to launch split-screen", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun createSplitScreenBundle(isPrimary: Boolean): android.os.Bundle? {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.N) return null
+        return try {
+            val options = android.app.ActivityOptions.makeBasic()
+            val setWindowingMode = android.app.ActivityOptions::class.java.getMethod("setLaunchWindowingMode", Int::class.javaPrimitiveType)
+            val mode = if (isPrimary) 3 else 4
+            setWindowingMode.invoke(options, mode)
+            options.toBundle()
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun addDriveQuickShortcut(packageName: String, shortcutId: String, label: String, appName: String = "") {
+        val newShortcut = DriveQuickShortcut(
+            id = "${packageName}_${shortcutId}_${System.currentTimeMillis()}",
+            packageName = packageName,
+            shortcutId = shortcutId,
+            label = label,
+            appName = appName
+        )
+        val updated = _driveQuickShortcuts.value + newShortcut
+        _driveQuickShortcuts.value = updated
+        saveDriveQuickShortcutsToPrefs(updated)
+    }
+
+    fun removeDriveQuickShortcut(id: String) {
+        val updated = _driveQuickShortcuts.value.filter { it.id != id }
+        _driveQuickShortcuts.value = updated
+        saveDriveQuickShortcutsToPrefs(updated)
+    }
+
+    private fun loadSavedDriveAppPairs(): List<DriveAppPair> {
+        val jsonString = drivePrefs.getString("drive_app_pairs_json", null) ?: return emptyList()
+        return try {
+            val array = org.json.JSONArray(jsonString)
+            val list = mutableListOf<DriveAppPair>()
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                list.add(
+                    DriveAppPair(
+                        id = obj.optString("id", "pair_$i"),
+                        label = obj.optString("label", "App Pair"),
+                        package1 = obj.optString("package1", ""),
+                        package2 = obj.optString("package2", "")
+                    )
+                )
+            }
+            list
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun saveDriveAppPairsToPrefs(pairs: List<DriveAppPair>) {
+        try {
+            val array = org.json.JSONArray()
+            pairs.forEach { p ->
+                val obj = org.json.JSONObject().apply {
+                    put("id", p.id)
+                    put("label", p.label)
+                    put("package1", p.package1)
+                    put("package2", p.package2)
+                }
+                array.put(obj)
+            }
+            drivePrefs.edit().putString("drive_app_pairs_json", array.toString()).apply()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun loadSavedDriveQuickShortcuts(): List<DriveQuickShortcut> {
+        val jsonString = drivePrefs.getString("drive_quick_shortcuts_json", null) ?: return emptyList()
+        return try {
+            val array = org.json.JSONArray(jsonString)
+            val list = mutableListOf<DriveQuickShortcut>()
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                list.add(
+                    DriveQuickShortcut(
+                        id = obj.optString("id", "sc_$i"),
+                        packageName = obj.optString("packageName", ""),
+                        shortcutId = obj.optString("shortcutId", ""),
+                        label = obj.optString("label", "Shortcut"),
+                        appName = obj.optString("appName", "")
+                    )
+                )
+            }
+            list
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun saveDriveQuickShortcutsToPrefs(shortcuts: List<DriveQuickShortcut>) {
+        try {
+            val array = org.json.JSONArray()
+            shortcuts.forEach { s ->
+                val obj = org.json.JSONObject().apply {
+                    put("id", s.id)
+                    put("packageName", s.packageName)
+                    put("shortcutId", s.shortcutId)
+                    put("label", s.label)
+                    put("appName", s.appName)
+                }
+                array.put(obj)
+            }
+            drivePrefs.edit().putString("drive_quick_shortcuts_json", array.toString()).apply()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun launchDriveQuickShortcut(context: Context, shortcut: DriveQuickShortcut) {
+        try {
+            val launcherApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as? android.content.pm.LauncherApps
+            if (launcherApps != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N_MR1) {
+                launcherApps.startShortcut(
+                    shortcut.packageName,
+                    shortcut.shortcutId,
+                    null,
+                    null,
+                    android.os.Process.myUserHandle()
+                )
+            } else {
+                val intent = context.packageManager.getLaunchIntentForPackage(shortcut.packageName)
+                if (intent != null) context.startActivity(intent)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            try {
+                val intent = context.packageManager.getLaunchIntentForPackage(shortcut.packageName)
+                if (intent != null) context.startActivity(intent)
+            } catch (ex: Exception) {
+                android.widget.Toast.makeText(context, "Could not launch ${shortcut.label}", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    fun getInstalledMediaApps(): List<AppInfo> {
+        val excludedKeywords = listOf(
+            "camera", "photo", "gallery", "image", "editor", "recorder",
+            "screenshot", "video", "cinema", "movie", "film", "lens", "snap", "scanner", "voice recorder"
+        )
+        val audioPackages = listOf(
+            "spotify", "youtube.music", "music", "audio", "podcast", "soundcloud",
+            "pandora", "audible", "deezer", "tidal", "apple.android.music", "amazon.mp3",
+            "poweramp", "musicolet", "shuttle", "blackplayer", "vlc", "tunein", "iheartradio"
+        )
+        return _allApps.value.filter { app ->
+            val pkg = app.packageName.lowercase()
+            val label = app.label.lowercase()
+
+            val isExcluded = excludedKeywords.any { pkg.contains(it) || label.contains(it) }
+            if (isExcluded) return@filter false
+
+            val isAudioPackage = audioPackages.any { pkg.contains(it) }
+            val isAudioLabel = label.contains("music") || label.contains("podcast") ||
+                label.contains("radio") || label.contains("audiobook") || label.contains("audible") ||
+                label.contains("sound") || label.contains("tuner")
+            val isAudioCategory = app.category.equals("Audio", ignoreCase = true) ||
+                app.category.equals("Music", ignoreCase = true) ||
+                app.category.equals("Music & Audio", ignoreCase = true)
+
+            isAudioPackage || isAudioLabel || isAudioCategory
+        }
+    }
+
+    private var audioPlaybackCallback: Any? = null
+    private var audioCheckJob: kotlinx.coroutines.Job? = null
+    private var musicMetaReceiver: android.content.BroadcastReceiver? = null
+
+    fun startMediaPlaybackTracking(context: Context) {
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager ?: return
+
+        // Instant check without wiping existing metadata
+        val isMusicActive = audioManager.isMusicActive
+        if (isMusicActive && !_driveMediaTrack.value.isPlaying) {
+            _driveMediaTrack.value = _driveMediaTrack.value.copy(
+                isPlaying = true,
+                title = _driveMediaTrack.value.title.takeIf { it != "No media playing" } ?: "Playing Audio",
+                artist = _driveMediaTrack.value.artist.takeIf { it != "Tap an app below to play" } ?: "Background audio active"
+            )
+        }
+
+        // Register broadcast receiver for music meta changes (Spotify, Android Music, etc.)
+        if (musicMetaReceiver == null) {
+            try {
+                musicMetaReceiver = object : android.content.BroadcastReceiver() {
+                    override fun onReceive(c: Context?, intent: Intent?) {
+                        if (intent == null) return
+                        val track = intent.getStringExtra("track") ?: intent.getStringExtra("title")
+                        val artist = intent.getStringExtra("artist")
+                        val album = intent.getStringExtra("album") ?: ""
+                        val playing = intent.getBooleanExtra("playing", true)
+                        val pkg = intent.getPackage()
+
+                        if (!track.isNullOrBlank()) {
+                            val appName = when {
+                                intent.action?.contains("spotify") == true -> "Spotify"
+                                else -> "Music"
+                            }
+                            com.example.service.MediaStateManager.updateTrack(
+                                title = track,
+                                artist = artist ?: appName,
+                                album = album,
+                                isPlaying = playing,
+                                activeAppPackage = pkg,
+                                activeAppName = appName
+                            )
+                        }
+                    }
+                }
+
+                val filter = IntentFilter().apply {
+                    addAction("com.spotify.music.metadatachanged")
+                    addAction("com.spotify.music.playbackstatechanged")
+                    addAction("com.android.music.metachanged")
+                    addAction("com.android.music.playstatechanged")
+                    addAction("com.android.music.playbackcomplete")
+                    addAction("com.htc.music.metachanged")
+                    addAction("fm.last.android.metachanged")
+                    addAction("com.sec.android.app.music.metachanged")
+                    addAction("com.nullsoft.winamp.metachanged")
+                    addAction("com.amazon.mp3.metachanged")
+                    addAction("com.miui.player.metachanged")
+                    addAction("com.real.IMP.metachanged")
+                    addAction("com.sonyericsson.music.metachanged")
+                    addAction("com.rdio.android.metachanged")
+                    addAction("com.samsung.sec.android.MusicPlayer.metachanged")
+                    addAction("com.andrew.apollo.metachanged")
+                }
+                ContextCompat.registerReceiver(
+                    context,
+                    musicMetaReceiver!!,
+                    filter,
+                    ContextCompat.RECEIVER_EXPORTED
+                )
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+        }
+
+        // Periodic ticker while on Drive Mode screen (updates playback state without wiping metadata)
+        audioCheckJob?.cancel()
+        audioCheckJob = viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(1500)
+                val active = audioManager.isMusicActive
+                if (_driveMediaTrack.value.isPlaying != active) {
+                    _driveMediaTrack.value = _driveMediaTrack.value.copy(
+                        isPlaying = active
+                    )
+                }
+            }
+        }
+    }
+
+    fun stopMediaPlaybackTracking(context: Context? = null) {
+        audioCheckJob?.cancel()
+        audioCheckJob = null
+        if (context != null && musicMetaReceiver != null) {
+            try {
+                context.unregisterReceiver(musicMetaReceiver)
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+            musicMetaReceiver = null
+        }
+    }
+
+    fun isNotificationListenerGranted(context: Context): Boolean {
+        return try {
+            val flat = android.provider.Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+            flat?.contains(context.packageName) == true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    fun openNotificationListenerSettings(context: Context) {
+        try {
+            val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    suspend fun searchPlaceSuggestions(context: Context, query: String): List<String> = withContext(Dispatchers.IO) {
+        if (query.length < 2) return@withContext emptyList()
+        try {
+            val geocoder = android.location.Geocoder(context, java.util.Locale.getDefault())
+            @Suppress("DEPRECATION")
+            val results = geocoder.getFromLocationName(query, 5) ?: emptyList()
+            results.mapNotNull { address ->
+                val feature = address.featureName
+                val street = address.thoroughfare
+                val locality = address.locality ?: address.subAdminArea ?: address.adminArea
+                val line = address.getAddressLine(0)
+                line ?: if (feature != null && locality != null) "$feature, $locality" else feature
+            }.distinct()
+        } catch (e: Throwable) {
+            emptyList()
+        }
+    }
+
+    fun toggleDriveManeuverDemo() {
+        val current = _driveManeuver.value
+        if (current.isNavigating) {
+            _driveManeuver.value = DriveManeuverInfo(
+                isNavigating = false,
+                instruction = "Ready to Navigate",
+                roadName = "Tap destination below or tap map",
+                distanceRemainingText = ""
+            )
+        } else {
+            _driveManeuver.value = DriveManeuverInfo(
+                isNavigating = true,
+                maneuverType = "LEFT",
+                instruction = "In 0.5 mi, turn left onto Main St.",
+                roadName = "Main St.",
+                distanceRemainingText = "0.5 mi"
+            )
+        }
+    }
+
     private var locationManager: android.location.LocationManager? = null
     private var locationListener: android.location.LocationListener? = null
     private var isSimulatingSpeed = false
@@ -431,8 +1210,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                             lastLocTime = location.time
                             _driveStats.value = _driveStats.value.copy(
                                 currentSpeedMph = speedMph,
-                                isDrivingDetected = speedMph > 5
+                                isDrivingDetected = speedMph > 5,
+                                latitude = location.latitude,
+                                longitude = location.longitude
                             )
+                            recalculateDestinationEtas(location.latitude, location.longitude)
                         }
                         @Deprecated("Deprecated in Java")
                         override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) {}
@@ -450,6 +1232,24 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    private fun recalculateDestinationEtas(lat: Double, lng: Double) {
+        // Distance calculation with dynamic ETA estimation
+        val baseSpeedMph = 30.0
+        val updated = _driveDestinationEtas.value.map { dest ->
+            val distMiles = when (dest.id) {
+                "home" -> kotlin.math.abs(lat - 37.77) * 45.0 + 4.2
+                "work" -> kotlin.math.abs(lat - 37.78) * 50.0 + 7.5
+                else -> 1.5
+            }
+            val etaMinutes = ((distMiles / baseSpeedMph) * 60).toInt().coerceAtLeast(2)
+            dest.copy(
+                distanceMiles = (distMiles * 10).toInt() / 10.0,
+                etaMinutes = etaMinutes
+            )
+        }
+        _driveDestinationEtas.value = updated
+    }
+
     fun stopSpeedTracking() {
         try {
             locationListener?.let { listener ->
@@ -463,21 +1263,29 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun toggleSpeedSimulation() {
-        isSimulatingSpeed = !isSimulatingSpeed
-        if (isSimulatingSpeed) {
-            val current = _driveStats.value.currentSpeedMph
-            val nextSpeed = when {
-                current < 25 -> 25
-                current < 45 -> 45
-                current < 65 -> 65
-                else -> 0
-            }
+        val current = _driveStats.value.currentSpeedMph
+        if (!isSimulatingSpeed || current == 0) {
+            isSimulatingSpeed = true
             _driveStats.value = _driveStats.value.copy(
-                currentSpeedMph = nextSpeed,
-                isDrivingDetected = nextSpeed > 5
+                currentSpeedMph = 25,
+                isDrivingDetected = true
+            )
+        } else if (current < 45) {
+            _driveStats.value = _driveStats.value.copy(
+                currentSpeedMph = 45,
+                isDrivingDetected = true
+            )
+        } else if (current < 65) {
+            _driveStats.value = _driveStats.value.copy(
+                currentSpeedMph = 65,
+                isDrivingDetected = true
             )
         } else {
-            _driveStats.value = _driveStats.value.copy(currentSpeedMph = 0, isDrivingDetected = false)
+            isSimulatingSpeed = false
+            _driveStats.value = _driveStats.value.copy(
+                currentSpeedMph = 0,
+                isDrivingDetected = false
+            )
             startSpeedTracking()
         }
     }
@@ -487,22 +1295,145 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun sendMediaKeyEvent(context: Context, keyCode: Int) {
+        // 1. Direct MediaController transport invocation via MediaStateManager
+        val handled = when (keyCode) {
+            android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                if (_driveMediaTrack.value.isPlaying) {
+                    com.example.service.MediaStateManager.triggerPause()
+                } else {
+                    com.example.service.MediaStateManager.triggerPlay()
+                }
+            }
+            android.view.KeyEvent.KEYCODE_MEDIA_PLAY -> com.example.service.MediaStateManager.triggerPlay()
+            android.view.KeyEvent.KEYCODE_MEDIA_PAUSE -> com.example.service.MediaStateManager.triggerPause()
+            android.view.KeyEvent.KEYCODE_MEDIA_NEXT -> com.example.service.MediaStateManager.triggerNext()
+            android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS -> com.example.service.MediaStateManager.triggerPrevious()
+            else -> false
+        }
+
+        if (!handled) {
+            try {
+                val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+                val downEvent = android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, keyCode)
+                val upEvent = android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, keyCode)
+                audioManager?.dispatchMediaKeyEvent(downEvent)
+                audioManager?.dispatchMediaKeyEvent(upEvent)
+            } catch (e: Exception) {
+                try {
+                    val downIntent = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
+                        putExtra(Intent.EXTRA_KEY_EVENT, android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, keyCode))
+                    }
+                    val upIntent = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
+                        putExtra(Intent.EXTRA_KEY_EVENT, android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, keyCode))
+                    }
+                    context.sendOrderedBroadcast(downIntent, null)
+                    context.sendOrderedBroadcast(upIntent, null)
+                } catch (err: Exception) {
+                    err.printStackTrace()
+                }
+            }
+        }
+
+        if (keyCode == android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
+            val currentPlaying = _driveMediaTrack.value.isPlaying
+            _driveMediaTrack.value = _driveMediaTrack.value.copy(
+                isPlaying = !currentPlaying
+            )
+        }
+    }
+
+    fun launchDriveNavigation(context: Context, destinationQuery: String? = null) {
         try {
-            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
-            val downEvent = android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, keyCode)
-            val upEvent = android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, keyCode)
-            audioManager?.dispatchMediaKeyEvent(downEvent)
-            audioManager?.dispatchMediaKeyEvent(upEvent)
+            val uriStr = if (!destinationQuery.isNullOrBlank()) {
+                "google.navigation:q=${Uri.encode(destinationQuery)}"
+            } else {
+                "geo:0,0?q="
+            }
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uriStr)).apply {
+                setPackage("com.google.android.apps.maps")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
         } catch (e: Exception) {
             try {
-                val downIntent = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
-                    putExtra(Intent.EXTRA_KEY_EVENT, android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, keyCode))
+                val fallbackUri = if (!destinationQuery.isNullOrBlank()) {
+                    "geo:0,0?q=${Uri.encode(destinationQuery)}"
+                } else {
+                    "geo:0,0"
                 }
-                val upIntent = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
-                    putExtra(Intent.EXTRA_KEY_EVENT, android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, keyCode))
+                val fallbackIntent = Intent(Intent.ACTION_VIEW, Uri.parse(fallbackUri)).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
-                context.sendOrderedBroadcast(downIntent, null)
-                context.sendOrderedBroadcast(upIntent, null)
+                context.startActivity(fallbackIntent)
+            } catch (err: Exception) {
+                err.printStackTrace()
+            }
+        }
+    }
+
+    fun launchDrivePhoneCall(context: Context, phoneNumber: String? = null) {
+        try {
+            if (!phoneNumber.isNullOrBlank()) {
+                val callIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${Uri.encode(phoneNumber.trim())}")).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(callIntent)
+            } else {
+                val dialIntent = Intent(Intent.ACTION_DIAL).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(dialIntent)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun launchDriveVoiceAssistant(context: Context) {
+        try {
+            val voiceIntent = Intent(Intent.ACTION_VOICE_COMMAND).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(voiceIntent)
+        } catch (e: Exception) {
+            try {
+                val assistIntent = Intent(Intent.ACTION_ASSIST).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(assistIntent)
+            } catch (err: Exception) {
+                err.printStackTrace()
+            }
+        }
+    }
+
+    fun launchDriveMediaApp(context: Context, targetPackage: String? = null) {
+        val resolvedPkg = targetPackage ?: _driveMediaTrack.value.activeAppPackage
+        if (!resolvedPkg.isNullOrBlank()) {
+            launchPackageName(context, resolvedPkg)
+            return
+        }
+
+        // Fallback: launch first installed audio app if available
+        val installedMedia = getInstalledMediaApps()
+        if (installedMedia.isNotEmpty()) {
+            launchApp(context, installedMedia.first())
+            return
+        }
+
+        try {
+            val musicIntent = Intent(Intent.CATEGORY_APP_MUSIC).apply {
+                action = Intent.ACTION_MAIN
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(musicIntent)
+        } catch (e: Exception) {
+            try {
+                @Suppress("DEPRECATION")
+                val genericIntent = Intent(android.provider.MediaStore.INTENT_ACTION_MUSIC_PLAYER).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(genericIntent)
             } catch (err: Exception) {
                 err.printStackTrace()
             }

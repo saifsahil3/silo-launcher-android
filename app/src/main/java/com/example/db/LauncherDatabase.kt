@@ -81,13 +81,19 @@ interface ModeSettingDao {
         ModeSettingEntity::class,
         PinnedAppEntity::class,
         CreatorStageConfigEntity::class,
-        OfflineBookEntity::class
+        OfflineBookEntity::class,
+        DriveShortcutEntity::class,
+        DriveNavLocationEntity::class,
+        DriveCommShortcutEntity::class
     ],
-    version = 6,
+    version = 8,
     exportSchema = false
 )
 abstract class LauncherDatabase : RoomDatabase() {
     abstract fun modeSettingDao(): ModeSettingDao
     abstract fun offlineBookDao(): OfflineBookDao
+    abstract fun driveShortcutDao(): DriveShortcutDao
+    abstract fun driveNavLocationDao(): DriveNavLocationDao
+    abstract fun driveCommShortcutDao(): DriveCommShortcutDao
 }
 
