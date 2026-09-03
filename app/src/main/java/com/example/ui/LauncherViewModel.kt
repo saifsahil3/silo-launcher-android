@@ -2,6 +2,7 @@ package com.example.ui
 
 import android.app.Application
 import android.app.Activity
+import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.ContextWrapper
@@ -10,6 +11,10 @@ import android.content.IntentFilter
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.os.BatteryManager
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -29,6 +34,7 @@ import com.example.model.FocusWidgetData
 import com.example.model.focusWidgetsFromJson
 import com.example.model.focusWidgetsToJson
 import com.example.model.getDefaultFocusWidgets
+import com.example.util.DndManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -109,6 +115,17 @@ data class CreatorSessionState(
     val hasTimerBeenStarted: Boolean = false
 )
 
+data class FocusTimerState(
+    val isRunning: Boolean = false,
+    val isPaused: Boolean = false,
+    val durationMinutes: Int = 25,
+    val secondsRemaining: Int = 25 * 60,
+    val targetEndTimeMillis: Long = 0L,
+    val hasEnded: Boolean = false,
+    val autoDndEnabled: Boolean = true,
+    val selectedDndFilter: Int = NotificationManager.INTERRUPTION_FILTER_PRIORITY
+)
+
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
 
     private val appRepository = AppRepository()
@@ -145,6 +162,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     private val _focusGoal = MutableStateFlow("Deep Work & Zero Distractions")
     val focusGoal: StateFlow<String> = _focusGoal.asStateFlow()
+
+    private var focusTimerJob: Job? = null
+    private val focusTimerPrefs = application.getSharedPreferences("silo_focus_timer_prefs", Context.MODE_PRIVATE)
+    private val _focusTimerState = MutableStateFlow(loadSavedFocusTimerState())
+    val focusTimerState: StateFlow<FocusTimerState> = _focusTimerState.asStateFlow()
 
     private val _driveFavoritePackages = MutableStateFlow<List<String>>(emptyList())
     val driveFavoritePackages: StateFlow<List<String>> = _driveFavoritePackages.asStateFlow()
@@ -296,6 +318,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         loadDriveNavLocations()
         loadDriveCommShortcuts()
         registerBatteryReceiver()
+
+        if (_focusTimerState.value.isRunning && !_focusTimerState.value.isPaused) {
+            startFocusTimerLoop()
+        }
 
         // Observe real-time media metadata and playback updates
         viewModelScope.launch {
@@ -469,6 +495,249 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             val stringVal = packages.joinToString(",")
             val updated = _settings.value.copy(focusAllowedPackages = stringVal)
             dao.saveSettings(updated)
+        }
+    }
+
+    // Focus Timer
+    private fun loadSavedFocusTimerState(): FocusTimerState {
+        val isRunning = focusTimerPrefs.getBoolean("is_running", false)
+        val isPaused = focusTimerPrefs.getBoolean("is_paused", false)
+        val duration = focusTimerPrefs.getInt("duration_minutes", 25)
+        val targetEndTime = focusTimerPrefs.getLong("target_end_time", 0L)
+        val autoDnd = focusTimerPrefs.getBoolean("auto_dnd", true)
+        val dndFilter = focusTimerPrefs.getInt("dnd_filter", NotificationManager.INTERRUPTION_FILTER_PRIORITY)
+
+        return if (isRunning && !isPaused && targetEndTime > 0L) {
+            val now = System.currentTimeMillis()
+            val remaining = ((targetEndTime - now + 999L) / 1000L).coerceAtLeast(0L).toInt()
+            if (remaining > 0) {
+                FocusTimerState(
+                    isRunning = true,
+                    isPaused = false,
+                    durationMinutes = duration,
+                    secondsRemaining = remaining,
+                    targetEndTimeMillis = targetEndTime,
+                    hasEnded = false,
+                    autoDndEnabled = autoDnd,
+                    selectedDndFilter = dndFilter
+                )
+            } else {
+                FocusTimerState(
+                    isRunning = false,
+                    isPaused = false,
+                    durationMinutes = duration,
+                    secondsRemaining = 0,
+                    targetEndTimeMillis = targetEndTime,
+                    hasEnded = true,
+                    autoDndEnabled = autoDnd,
+                    selectedDndFilter = dndFilter
+                )
+            }
+        } else if (isPaused) {
+            val savedRemaining = focusTimerPrefs.getInt("seconds_remaining", duration * 60)
+            FocusTimerState(
+                isRunning = false,
+                isPaused = true,
+                durationMinutes = duration,
+                secondsRemaining = savedRemaining,
+                targetEndTimeMillis = 0L,
+                hasEnded = false,
+                autoDndEnabled = autoDnd,
+                selectedDndFilter = dndFilter
+            )
+        } else {
+            FocusTimerState(
+                isRunning = false,
+                isPaused = false,
+                durationMinutes = duration,
+                secondsRemaining = duration * 60,
+                targetEndTimeMillis = 0L,
+                hasEnded = false,
+                autoDndEnabled = autoDnd,
+                selectedDndFilter = dndFilter
+            )
+        }
+    }
+
+    private fun persistFocusTimerState(state: FocusTimerState) {
+        focusTimerPrefs.edit()
+            .putBoolean("is_running", state.isRunning)
+            .putBoolean("is_paused", state.isPaused)
+            .putInt("duration_minutes", state.durationMinutes)
+            .putLong("target_end_time", state.targetEndTimeMillis)
+            .putInt("seconds_remaining", state.secondsRemaining)
+            .putBoolean("auto_dnd", state.autoDndEnabled)
+            .putInt("dnd_filter", state.selectedDndFilter)
+            .apply()
+    }
+
+    fun startFocusTimer(durationMinutes: Int? = null) {
+        val current = _focusTimerState.value
+        val duration = durationMinutes ?: current.durationMinutes
+        val totalSeconds = if (current.isPaused && current.secondsRemaining > 0 && durationMinutes == null) {
+            current.secondsRemaining
+        } else {
+            duration * 60
+        }
+        val targetEndTime = System.currentTimeMillis() + (totalSeconds * 1000L)
+        val newState = current.copy(
+            isRunning = true,
+            isPaused = false,
+            durationMinutes = duration,
+            secondsRemaining = totalSeconds,
+            targetEndTimeMillis = targetEndTime,
+            hasEnded = false
+        )
+        _focusTimerState.value = newState
+        persistFocusTimerState(newState)
+
+        if (newState.autoDndEnabled && DndManager.isNotificationPolicyAccessGranted(getApplication())) {
+            DndManager.setDndInterruptionFilter(getApplication(), newState.selectedDndFilter)
+        }
+
+        startFocusTimerLoop()
+    }
+
+    fun pauseFocusTimer() {
+        val current = _focusTimerState.value
+        if (!current.isRunning || current.isPaused) return
+
+        focusTimerJob?.cancel()
+        val now = System.currentTimeMillis()
+        val remaining = ((current.targetEndTimeMillis - now + 999L) / 1000L).coerceAtLeast(0L).toInt()
+        val newState = current.copy(
+            isRunning = false,
+            isPaused = true,
+            secondsRemaining = remaining,
+            targetEndTimeMillis = 0L
+        )
+        _focusTimerState.value = newState
+        persistFocusTimerState(newState)
+    }
+
+    fun resumeFocusTimer() {
+        val current = _focusTimerState.value
+        if (current.secondsRemaining <= 0) {
+            startFocusTimer(current.durationMinutes)
+            return
+        }
+        val targetEndTime = System.currentTimeMillis() + (current.secondsRemaining * 1000L)
+        val newState = current.copy(
+            isRunning = true,
+            isPaused = false,
+            targetEndTimeMillis = targetEndTime,
+            hasEnded = false
+        )
+        _focusTimerState.value = newState
+        persistFocusTimerState(newState)
+
+        if (newState.autoDndEnabled && DndManager.isNotificationPolicyAccessGranted(getApplication())) {
+            DndManager.setDndInterruptionFilter(getApplication(), newState.selectedDndFilter)
+        }
+
+        startFocusTimerLoop()
+    }
+
+    fun resetFocusTimer(durationMinutes: Int? = null) {
+        focusTimerJob?.cancel()
+        val current = _focusTimerState.value
+        val duration = durationMinutes ?: current.durationMinutes
+        val newState = current.copy(
+            isRunning = false,
+            isPaused = false,
+            durationMinutes = duration,
+            secondsRemaining = duration * 60,
+            targetEndTimeMillis = 0L,
+            hasEnded = false
+        )
+        _focusTimerState.value = newState
+        persistFocusTimerState(newState)
+    }
+
+    fun setFocusTimerDuration(durationMinutes: Int) {
+        val current = _focusTimerState.value
+        if (!current.isRunning) {
+            val newState = current.copy(
+                durationMinutes = durationMinutes,
+                secondsRemaining = durationMinutes * 60,
+                isPaused = false,
+                hasEnded = false
+            )
+            _focusTimerState.value = newState
+            persistFocusTimerState(newState)
+        }
+    }
+
+    fun updateFocusAutoDnd(enabled: Boolean) {
+        val newState = _focusTimerState.value.copy(autoDndEnabled = enabled)
+        _focusTimerState.value = newState
+        persistFocusTimerState(newState)
+    }
+
+    fun setFocusDndFilter(filter: Int) {
+        val newState = _focusTimerState.value.copy(selectedDndFilter = filter)
+        _focusTimerState.value = newState
+        persistFocusTimerState(newState)
+    }
+
+    private fun startFocusTimerLoop() {
+        focusTimerJob?.cancel()
+        focusTimerJob = viewModelScope.launch {
+            while (true) {
+                delay(500L)
+                val current = _focusTimerState.value
+                if (!current.isRunning || current.isPaused) break
+
+                val now = System.currentTimeMillis()
+                val remaining = ((current.targetEndTimeMillis - now + 999L) / 1000L).coerceAtLeast(0L).toInt()
+
+                if (remaining <= 0) {
+                    val finishedState = current.copy(
+                        isRunning = false,
+                        isPaused = false,
+                        secondsRemaining = 0,
+                        hasEnded = true,
+                        targetEndTimeMillis = 0L
+                    )
+                    _focusTimerState.value = finishedState
+                    persistFocusTimerState(finishedState)
+                    onFocusTimerFinished()
+                    break
+                } else if (remaining != current.secondsRemaining) {
+                    _focusTimerState.value = current.copy(secondsRemaining = remaining)
+                }
+            }
+        }
+    }
+
+    private fun onFocusTimerFinished() {
+        val current = _focusTimerState.value
+        if (current.autoDndEnabled && DndManager.isNotificationPolicyAccessGranted(getApplication())) {
+            DndManager.setDndInterruptionFilter(getApplication(), NotificationManager.INTERRUPTION_FILTER_ALL)
+        }
+        triggerFocusTimerHapticFeedback()
+    }
+
+    private fun triggerFocusTimerHapticFeedback() {
+        try {
+            val app = getApplication<Application>()
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vm = app.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                vm?.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                app.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            }
+            if (vibrator != null && vibrator.hasVibrator()) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    vibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 300, 150, 300), -1))
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(500L)
+                }
+            }
+        } catch (e: Throwable) {
+            e.printStackTrace()
         }
     }
 

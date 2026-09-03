@@ -69,6 +69,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Notes
 import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Refresh
@@ -138,6 +139,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import com.example.data.AppInfo
 import com.example.ui.LauncherViewModel
+import com.example.ui.FocusTimerState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -205,6 +207,7 @@ fun FocusModeScreen(
     ) {
         HorizontalPager(
             state = pagerState,
+            beyondViewportPageCount = 1,
             modifier = Modifier.fillMaxSize()
         ) { page ->
             when (page) {
@@ -238,14 +241,8 @@ private fun FocusAppsPage(
     var currentTimeString by remember { mutableStateOf("") }
     var currentDateString by remember { mutableStateOf("") }
 
-    var isTimerRunning by remember { mutableStateOf(false) }
-    var timerSecondsRemaining by remember { mutableStateOf(25 * 60) }
-
-    var isDndExpanded by remember { mutableStateOf(false) }
-    var selectedDndFilter by remember {
-        mutableIntStateOf(DndManager.getDndInterruptionFilter(context))
-    }
-    var autoDndOnFocus by remember { mutableStateOf(true) }
+    val focusTimerState by viewModel.focusTimerState.collectAsState()
+    val selectedDndFilter = focusTimerState.selectedDndFilter
 
     LaunchedEffect(Unit) {
         val timeFormat = SimpleDateFormat("h:mm", Locale.getDefault())
@@ -255,19 +252,6 @@ private fun FocusAppsPage(
             currentTimeString = timeFormat.format(now)
             currentDateString = dateFormat.format(now)
             delay(1000)
-        }
-    }
-
-    LaunchedEffect(isTimerRunning) {
-        while (isTimerRunning && timerSecondsRemaining > 0) {
-            delay(1000)
-            timerSecondsRemaining -= 1
-        }
-        if (timerSecondsRemaining <= 0) {
-            isTimerRunning = false
-            if (autoDndOnFocus && DndManager.isNotificationPolicyAccessGranted(context)) {
-                DndManager.setDndInterruptionFilter(context, NotificationManager.INTERRUPTION_FILTER_ALL)
-            }
         }
     }
 
@@ -328,6 +312,16 @@ private fun FocusAppsPage(
                         fontWeight = FontWeight.Medium
                     )
                 }
+            }
+
+            if (focusTimerState.isRunning || focusTimerState.isPaused || focusTimerState.hasEnded) {
+                Spacer(modifier = Modifier.height(16.dp))
+                FocusSessionBanner(
+                    timerState = focusTimerState,
+                    onPause = { viewModel.pauseFocusTimer() },
+                    onResume = { viewModel.resumeFocusTimer() },
+                    onReset = { viewModel.resetFocusTimer() }
+                )
             }
         }
 
@@ -508,7 +502,7 @@ private fun FocusAppsPage(
         DndChooserDialog(
             selectedFilter = selectedDndFilter,
             onSelectFilter = { filter ->
-                selectedDndFilter = filter
+                viewModel.setFocusDndFilter(filter)
                 if (filter != NotificationManager.INTERRUPTION_FILTER_ALL) {
                     if (!DndManager.isNotificationPolicyAccessGranted(context)) {
                         showDndPermissionDialog = true
@@ -848,6 +842,7 @@ private fun FocusWidgetsPage(
     appWidgetManager: AppWidgetManager
 ) {
     val context = LocalContext.current
+    val focusTimerState by viewModel.focusTimerState.collectAsState()
     var showAddWidgetDialog by remember { mutableStateOf(false) }
 
     var pendingWidgetId by remember { mutableIntStateOf(-1) }
@@ -1203,6 +1198,19 @@ private fun FocusWidgetsPage(
                             }
                             is FocusWidgetData.BuiltInTimer -> {
                                 BuiltInTimerWidgetCard(
+                                    timerState = focusTimerState,
+                                    configuredDuration = widgetData.durationMinutes,
+                                    onStart = { duration ->
+                                        viewModel.startFocusTimer(duration ?: widgetData.durationMinutes)
+                                    },
+                                    onPause = { viewModel.pauseFocusTimer() },
+                                    onResume = { viewModel.resumeFocusTimer() },
+                                    onReset = { viewModel.resetFocusTimer(widgetData.durationMinutes) },
+                                    onDurationSelect = { newDuration ->
+                                        widgetData.durationMinutes = newDuration
+                                        saveWidgets()
+                                        viewModel.setFocusTimerDuration(newDuration)
+                                    },
                                     onRemove = {
                                         if (index in 0 until activeWidgets.size) {
                                             activeWidgets.removeAt(index)
@@ -1574,24 +1582,25 @@ private fun BuiltInMantraWidgetCard(
 
 @Composable
 private fun BuiltInTimerWidgetCard(
+    timerState: FocusTimerState,
+    configuredDuration: Int = 25,
+    onStart: (Int?) -> Unit,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onReset: () -> Unit,
+    onDurationSelect: (Int) -> Unit,
     onRemove: () -> Unit
 ) {
-    var timerSeconds by remember { mutableIntStateOf(25 * 60) }
-    var isRunning by remember { mutableStateOf(false) }
-
-    LaunchedEffect(isRunning) {
-        while (isRunning && timerSeconds > 0) {
-            delay(1000L)
-            timerSeconds--
-        }
-        if (timerSeconds == 0) {
-            isRunning = false
-        }
+    val displaySeconds = if (timerState.isRunning || timerState.isPaused) {
+        timerState.secondsRemaining
+    } else {
+        configuredDuration * 60
     }
 
-    val minutes = timerSeconds / 60
-    val seconds = timerSeconds % 60
+    val minutes = displaySeconds / 60
+    val seconds = displaySeconds % 60
     val timeFormatted = String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
+    val durationOptions = listOf(15, 25, 45, 60)
 
     Surface(
         shape = RoundedCornerShape(20.dp),
@@ -1646,26 +1655,55 @@ private fun BuiltInTimerWidgetCard(
                 )
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = { isRunning = !isRunning },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isRunning) Color(0xFFE57373) else Color(0xFFCE93D8)
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(
-                            text = if (isRunning) "Pause" else "Start",
-                            color = Color.Black,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
+                    if (timerState.isRunning) {
+                        Button(
+                            onClick = onPause,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFE57373)
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = "Pause",
+                                color = Color.Black,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                        }
+                    } else if (timerState.isPaused) {
+                        Button(
+                            onClick = onResume,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFCE93D8)
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = "Resume",
+                                color = Color.Black,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                        }
+                    } else {
+                        Button(
+                            onClick = { onStart(configuredDuration) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFCE93D8)
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = "Start",
+                                color = Color.Black,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                        }
                     }
 
                     OutlinedButton(
-                        onClick = {
-                            isRunning = false
-                            timerSeconds = 25 * 60
-                        },
+                        onClick = onReset,
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Text(
@@ -1674,6 +1712,139 @@ private fun BuiltInTimerWidgetCard(
                             fontSize = 13.sp
                         )
                     }
+                }
+            }
+
+            // Duration selector chips when not running
+            if (!timerState.isRunning && !timerState.isPaused) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    durationOptions.forEach { dur ->
+                        val isSelected = (configuredDuration == dur)
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isSelected) Color(0xFFCE93D8).copy(alpha = 0.25f) else Color(0xFF242630),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isSelected) Color(0xFFCE93D8) else Color.Transparent
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { onDurationSelect(dur) }
+                                .padding(vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = "${dur}m",
+                                fontSize = 12.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) Color(0xFFCE93D8) else Color.White.copy(alpha = 0.6f),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FocusSessionBanner(
+    timerState: FocusTimerState,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onReset: () -> Unit
+) {
+    val minutes = timerState.secondsRemaining / 60
+    val seconds = timerState.secondsRemaining % 60
+    val timeFormatted = String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
+
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = Color(0xFF1B1B22),
+        border = BorderStroke(1.dp, Color(0xFFCE93D8).copy(alpha = 0.4f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Timer,
+                    contentDescription = null,
+                    tint = if (timerState.isRunning) Color(0xFFCE93D8) else Color.White.copy(alpha = 0.5f),
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = if (timerState.hasEnded) "Focus Session Complete!" else timeFormatted,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        color = Color.White
+                    )
+                    Text(
+                        text = when {
+                            timerState.hasEnded -> "Tap reset to start another"
+                            timerState.isRunning -> "Focus Session In Progress"
+                            timerState.isPaused -> "Focus Session Paused"
+                            else -> "Focus Timer"
+                        },
+                        fontSize = 12.sp,
+                        color = Color.White.copy(alpha = 0.6f)
+                    )
+                }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (timerState.isRunning) {
+                    IconButton(
+                        onClick = onPause,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Pause,
+                            contentDescription = "Pause Timer",
+                            tint = Color(0xFFE57373),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                } else if (timerState.isPaused) {
+                    IconButton(
+                        onClick = onResume,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = "Resume Timer",
+                            tint = Color(0xFFCE93D8),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                IconButton(
+                    onClick = onReset,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Reset Timer",
+                        tint = Color.White.copy(alpha = 0.6f),
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
         }
