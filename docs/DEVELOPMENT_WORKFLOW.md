@@ -189,6 +189,7 @@ silo-launcher-android/
      - Generates Release APK (`assembleProdRelease`)
      - Generates Release AAB (`bundleProdRelease`)
      - Creates GitHub Release with build artifacts attached.
+   - For complete step-by-step release procedures, keystore setups, and self-hosted runner controls, see [RELEASE_GUIDE.md](RELEASE_GUIDE.md).
 
 ### Pull Request Mandates
 
